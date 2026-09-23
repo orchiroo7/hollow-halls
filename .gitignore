@@ -1,0 +1,8 @@
+# Godot's per-machine import cache - regenerated on first open
+.godot/
+
+# local tooling, machine-specific paths
+.claude/
+
+# build artefacts that are not the deployed site
+*.zip
