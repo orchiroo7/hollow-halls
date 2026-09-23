@@ -3,7 +3,7 @@
 Two prototypes built in Godot 4, from scratch, in GDScript. No assets, no
 plugins — every box, collider and camera move is made in code.
 
-**[▶ Play Hollow Halls 2.5D in your browser](https://ochiroo.github.io/hollow-halls/)**
+**[▶ Play Hollow Halls 2.5D in your browser](https://orchiroo7.github.io/hollow-halls/)**
 — works on a desktop with a keyboard, or on a phone held sideways.
 
 | | |
