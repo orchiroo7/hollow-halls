@@ -12,11 +12,12 @@ extends CanvasLayer
 
 const Look := preload("res://scripts/look.gd")
 
-## Which actions the round buttons press, top to bottom on the right.
+## The round buttons on the right, in slot order: the first slot is the one
+## under the resting thumb and is drawn biggest.
 const BUTTONS := [
-    {"action": "attack", "label": "ATTACK", "big": true},
-    {"action": "jump", "label": "JUMP", "big": false},
-    {"action": "dash", "label": "DASH", "big": false},
+    {"action": "jump", "label": "JUMP"},
+    {"action": "attack", "label": "ATTACK"},
+    {"action": "dash", "label": "DASH"},
 ]
 
 ## The camera bar across the top.
@@ -29,6 +30,7 @@ const CAMERA_BAR := [
 ]
 
 const DEAD_ZONE := 0.16
+const STICK_GRAB := 1.35   # you may grab the stick a little outside its ring
 
 var rig = null
 
@@ -40,6 +42,8 @@ var _hits: Array = []          # {node, centre, radius, action, hold}
 var _stick_home := Vector2.ZERO
 var _stick_radius := 90.0
 var _owners: Dictionary = {}   # touch index -> "stick" | "orbit" | an action name
+var _points: Dictionary = {}   # the camera's fingers, for the pinch
+var _pinch := 0.0              # last gap between two of them
 var _held: Dictionary = {}     # action -> how many fingers are on it
 
 
@@ -59,8 +63,9 @@ func _ready() -> void:
     _stick_base = _circle(Color(1, 1, 1, 0.06), Color(1, 1, 1, 0.16))
     _stick_knob = _circle(Color(Look.CYAN.r, Look.CYAN.g, Look.CYAN.b, 0.3), Color(Look.CYAN.r, Look.CYAN.g, Look.CYAN.b, 0.7))
 
-    for b in BUTTONS:
-        _hits.append({"node": _pill(b["label"], true), "action": b["action"], "hold": true, "big": b["big"]})
+    for i in BUTTONS.size():
+        var b: Dictionary = BUTTONS[i]
+        _hits.append({"node": _pill(b["label"], true), "action": b["action"], "hold": true, "big": i == 0})
     for c in CAMERA_BAR:
         _hits.append({"node": _pill(c["label"], false), "action": c["action"], "hold": c["hold"], "bar": true})
 
@@ -138,6 +143,7 @@ func _layout() -> void:
     var m: float = u * 0.05
     var r: float = u * 0.085
 
+    # fixed, not springing to the finger: you learn where it is and stop looking
     _stick_radius = u * 0.13
     _stick_home = Vector2(m + _stick_radius, rect.y - m - _stick_radius)
     _place(_stick_base, _stick_home, _stick_radius, true)
@@ -254,13 +260,14 @@ func _down(index: int, pos: Vector2) -> void:
             _press(h["action"], h["hold"])
             _lit(h["node"], true)
             return
-    if pos.x < get_viewport().get_visible_rect().size.x * 0.5:
+    if pos.distance_to(_stick_home) <= _stick_radius * STICK_GRAB:
         _owners[index] = "stick"
-        _stick_home = pos
-        _place(_stick_base, _stick_home, _stick_radius, true)
         _drag_stick(pos)
     else:
+        # anywhere else is the camera's: one finger swings the orbit, two pinch
         _owners[index] = "orbit"
+        _points[index] = pos
+        _pinch = 0.0
 
 
 func _drag(index: int, pos: Vector2, relative: Vector2) -> void:
@@ -268,15 +275,34 @@ func _drag(index: int, pos: Vector2, relative: Vector2) -> void:
         "stick":
             _drag_stick(pos)
         "orbit":
-            if rig != null:
+            _points[index] = pos
+            if _points.size() >= 2:
+                _pinch_zoom()
+            elif rig != null:
                 rig.orbit_by(relative)
         _:
             pass
 
 
+## Two fingers on empty space: spreading them pulls the camera in, closing
+## them pushes it out, by however much the gap between them changed.
+func _pinch_zoom() -> void:
+    var keys: Array = _points.keys()
+    var a: Vector2 = _points[keys[0]]
+    var b: Vector2 = _points[keys[1]]
+    var gap: float = a.distance_to(b)
+    if gap < 1.0:
+        return
+    if _pinch > 1.0 and rig != null:
+        rig.zoom_by((_pinch - gap) / _pinch)
+    _pinch = gap
+
+
 func _up(index: int) -> void:
     var who: String = _owners.get(index, "")
     _owners.erase(index)
+    _points.erase(index)
+    _pinch = 0.0   # a finger left, so the gap starts again from scratch
     if who == "stick":
         _release_moves()
         _place(_stick_knob, _stick_home, _stick_radius * 0.42, true)

@@ -11,7 +11,7 @@ const SIDE := 1
 
 var shots_dir := ""
 var game = null
-const EXPECTED_CHECKS := 137
+const EXPECTED_CHECKS := 142
 
 var failures := 0
 var checks := 0
@@ -328,6 +328,8 @@ func _test_touch() -> void:
     var attack_at: Vector2 = t.hit_centre("attack")
     _check(Rect2(Vector2.ZERO, rect).has_point(orbit_at), "the ORBIT button is on screen %s" % orbit_at)
     _check(attack_at.x > rect.x * 0.5 and attack_at.y > rect.y * 0.5, "attack sits under the right thumb")
+    _check(t.hit_centre("jump").distance_to(Vector2(rect.x, rect.y)) < attack_at.distance_to(Vector2(rect.x, rect.y)),
+        "jump has the corner, attack sits beside it")
     _check(t.stick_centre().x < rect.x * 0.5 and t.stick_centre().y > rect.y * 0.5, "the stick sits under the left one")
 
     # tapping ORBIT opens the orbit, tapping TOP closes it
@@ -340,6 +342,21 @@ func _test_touch() -> void:
     await _touch_drag(1, Vector2(rect.x * 0.78, rect.y * 0.4), Vector2(rect.x * 0.62, rect.y * 0.4))
     await _touch(1, Vector2(rect.x * 0.62, rect.y * 0.4), false)
     _check(absf(game.rig.free_yaw - yaw0) > 0.1, "dragging the right of the screen swings it (%.2f rad)" % (game.rig.free_yaw - yaw0))
+    # two fingers on empty space pinch the orbit in and out
+    var dist0: float = game.rig.free_dist
+    var mid := Vector2(rect.x * 0.7, rect.y * 0.45)
+    await _touch(1, mid - Vector2(40, 0), true)
+    await _touch(2, mid + Vector2(40, 0), true)
+    await _touch_drag(1, mid - Vector2(40, 0), mid - Vector2(150, 0))
+    await _touch_drag(2, mid + Vector2(40, 0), mid + Vector2(150, 0))
+    _check(game.rig.free_dist < dist0 - 0.5, "spreading two fingers pulls the camera in (%.1f -> %.1f m)" % [dist0, game.rig.free_dist])
+    var dist1: float = game.rig.free_dist
+    await _touch_drag(1, mid - Vector2(150, 0), mid - Vector2(30, 0))
+    await _touch_drag(2, mid + Vector2(150, 0), mid + Vector2(30, 0))
+    _check(game.rig.free_dist > dist1 + 0.5, "and closing them pushes it back out (%.1f m)" % game.rig.free_dist)
+    await _touch(1, mid, false)
+    await _touch(2, mid, false)
+
     await _touch(0, t.hit_centre("cam_top"), true)
     await _touch(0, t.hit_centre("cam_top"), false)
     await _settle()
@@ -368,6 +385,14 @@ func _test_touch() -> void:
     await _touch(0, out, false)
     await get_tree().process_frame
     _check(Input.get_action_strength("move_right") == 0.0, "letting go stops you")
+
+    # the stick stays put: touching empty floor well away from it is not a stick
+    var far_left := Vector2(rect.x * 0.42, rect.y * 0.35)
+    await _touch(0, far_left, true)
+    await _touch_drag(0, far_left, far_left + Vector2(120, 0))
+    _check(Input.get_action_strength("move_right") == 0.0, "touching away from the stick does not steer you")
+    _check(t.stick_centre() == home, "and the stick has not moved to the finger")
+    await _touch(0, far_left + Vector2(120, 0), false)
 
     # and the action buttons reach the same code the keys do
     game.player.attack_cd = 0.0

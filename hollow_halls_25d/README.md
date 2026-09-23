@@ -78,10 +78,13 @@ camera yaw rather than a fixed one, so `D` is screen-right at any angle.
 ## On a phone
 
 There is a web build in [`../docs`](../docs),
-and on a touch screen `scripts/touch.gd` adds on-screen controls: a stick that
-springs to wherever your left thumb lands, ATTACK / JUMP / DASH under the right
-one, and a camera bar of TOP / SIDE / ORBIT with turn arrows either side. In the
-free orbit, dragging the right of the screen swings the camera.
+and on a touch screen `scripts/touch.gd` adds on-screen controls: a stick in the
+bottom-left corner, JUMP / ATTACK / DASH under the right thumb, and a camera bar
+of TOP / SIDE / ORBIT with turn arrows either side.
+
+Everything that is not a button belongs to the camera. In the free orbit, a
+finger dragged across empty screen swings it around the player, and two fingers
+pinch it closer or push it away.
 
 It is purely additive. The touch layer presses the same input actions the keys
 do - with a strength, so the stick is analogue - and nothing else in the game
