@@ -11,7 +11,7 @@ const SIDE := 1
 
 var shots_dir := ""
 var game = null
-const EXPECTED_CHECKS := 142
+const EXPECTED_CHECKS := 147
 
 var failures := 0
 var checks := 0
@@ -387,12 +387,35 @@ func _test_touch() -> void:
     _check(Input.get_action_strength("move_right") == 0.0, "letting go stops you")
 
     # the stick stays put: touching empty floor well away from it is not a stick
+    # - and a drag that long across a flat view is a flick, so it turns the view
     var far_left := Vector2(rect.x * 0.42, rect.y * 0.35)
+    var yaw_before: int = game.rig.yaw_degrees()
     await _touch(0, far_left, true)
     await _touch_drag(0, far_left, far_left + Vector2(120, 0))
     _check(Input.get_action_strength("move_right") == 0.0, "touching away from the stick does not steer you")
     _check(t.stick_centre() == home, "and the stick has not moved to the finger")
     await _touch(0, far_left + Vector2(120, 0), false)
+    await _settle()
+    _check(game.rig.yaw_degrees() == posmod(yaw_before - 90, 360),
+        "flicking across a flat view turns it a quarter (%d -> %d)" % [yaw_before, game.rig.yaw_degrees()])
+
+    # two fingers are the camera in any view, so they open the orbit themselves
+    await _set_camera(TOP, 0)
+    var f1 := Vector2(rect.x * 0.55, rect.y * 0.32)
+    var f2 := Vector2(rect.x * 0.75, rect.y * 0.32)
+    await _touch(1, f1, true)
+    await _touch(2, f2, true)
+    _check(game.rig.is_free(), "two fingers on a flat view go straight into the orbit")
+    var pitch_before: float = game.rig.free_pitch
+    await _touch_drag(1, f1, f1 + Vector2(0, 70))
+    await _touch_drag(2, f2, f2 + Vector2(0, 70))
+    _check(absf(game.rig.free_pitch - pitch_before) > 0.1,
+        "and moving them together swings it (%.2f rad)" % (game.rig.free_pitch - pitch_before))
+    await _touch(1, f1 + Vector2(0, 70), false)
+    await _touch(2, f2 + Vector2(0, 70), false)
+    await _set_camera(TOP, 0)
+    await _place(Vector3(0, 0.8, 0))
+    await _wait(0.3)
 
     # and the action buttons reach the same code the keys do
     game.player.attack_cd = 0.0
@@ -693,6 +716,7 @@ func _test_combat() -> void:
     game.reset_enemies()
     await get_tree().physics_frame
     var victim = _nearest_enemy("walker", Vector3(0, 0, -12.5))
+    _check(victim != null, "found a walker in hall_2 to slash at")
     if victim != null:
         var hp0: int = victim.hp
         p.invuln = 2.0
@@ -700,6 +724,10 @@ func _test_combat() -> void:
         p.velocity = Vector3.ZERO
         p.facing_vec = Vector3(0, 0, -1)
         var placed: Vector3 = p.global_position
+        # the nail's cooldown does not run down while a camera swing has
+        # gameplay paused, so whatever the last test left on it is still there
+        p.attack_cd = 0.0
+        p.attack_time = 0.0
         await _press("attack")
         await _wait(0.2)
         var hp1: int = victim.hp if is_instance_valid(victim) else 0
@@ -709,6 +737,7 @@ func _test_combat() -> void:
 
     # contact damage
     var biter = _nearest_enemy("", p.global_position)
+    _check(biter != null, "found an enemy to be bitten by")
     if biter != null:
         p.health = 5
         p.invuln = 0.0

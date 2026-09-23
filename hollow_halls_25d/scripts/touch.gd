@@ -31,6 +31,8 @@ const CAMERA_BAR := [
 
 const DEAD_ZONE := 0.16
 const STICK_GRAB := 1.35   # you may grab the stick a little outside its ring
+const STICK_NUDGE := 0.035 # in from the corner, as a fraction of the short side
+const SWIPE := 0.07        # of the screen's width, to count as a flick
 
 var rig = null
 
@@ -42,8 +44,10 @@ var _hits: Array = []          # {node, centre, radius, action, hold}
 var _stick_home := Vector2.ZERO
 var _stick_radius := 90.0
 var _owners: Dictionary = {}   # touch index -> "stick" | "orbit" | an action name
-var _points: Dictionary = {}   # the camera's fingers, for the pinch
+var _points: Dictionary = {}   # the camera's fingers
 var _pinch := 0.0              # last gap between two of them
+var _mid := Vector2.ZERO       # and the point between them
+var _swipe := Vector2.ZERO     # how far a one-finger flat-view drag has gone
 var _held: Dictionary = {}     # action -> how many fingers are on it
 
 
@@ -145,7 +149,8 @@ func _layout() -> void:
 
     # fixed, not springing to the finger: you learn where it is and stop looking
     _stick_radius = u * 0.13
-    _stick_home = Vector2(m + _stick_radius, rect.y - m - _stick_radius)
+    var nudge: float = u * STICK_NUDGE
+    _stick_home = Vector2(m + _stick_radius + nudge, rect.y - m - _stick_radius - nudge)
     _place(_stick_base, _stick_home, _stick_radius, true)
     _place(_stick_knob, _stick_home, _stick_radius * 0.42, true)
 
@@ -264,10 +269,17 @@ func _down(index: int, pos: Vector2) -> void:
         _owners[index] = "stick"
         _drag_stick(pos)
     else:
-        # anywhere else is the camera's: one finger swings the orbit, two pinch
+        # anywhere else is the camera's
         _owners[index] = "orbit"
         _points[index] = pos
-        _pinch = 0.0
+        _swipe = Vector2.ZERO
+        if _points.size() >= 2:
+            # two fingers are always the camera, in any view. If this is a flat
+            # one, that means going into the orbit first - which is exactly what
+            # someone reaching for two fingers is asking for.
+            if rig != null and not rig.is_free():
+                rig.toggle_free()
+            _restart_pinch()
 
 
 func _drag(index: int, pos: Vector2, relative: Vector2) -> void:
@@ -277,32 +289,57 @@ func _drag(index: int, pos: Vector2, relative: Vector2) -> void:
         "orbit":
             _points[index] = pos
             if _points.size() >= 2:
-                _pinch_zoom()
-            elif rig != null:
+                _two_finger()
+            elif rig == null:
+                pass
+            elif rig.is_free():
                 rig.orbit_by(relative)
+            else:
+                _swipe += relative  # a flat view: this might turn out to be a flick
         _:
             pass
 
 
-## Two fingers on empty space: spreading them pulls the camera in, closing
-## them pushes it out, by however much the gap between them changed.
-func _pinch_zoom() -> void:
+func _restart_pinch() -> void:
+    var keys: Array = _points.keys()
+    if keys.size() < 2:
+        _pinch = 0.0
+        return
+    var a: Vector2 = _points[keys[0]]
+    var b: Vector2 = _points[keys[1]]
+    _pinch = a.distance_to(b)
+    _mid = (a + b) * 0.5
+
+
+## Two fingers, doing both at once the way a map does: the gap between them
+## zooms, and where they are between them swings the orbit.
+func _two_finger() -> void:
     var keys: Array = _points.keys()
     var a: Vector2 = _points[keys[0]]
     var b: Vector2 = _points[keys[1]]
     var gap: float = a.distance_to(b)
-    if gap < 1.0:
+    var mid: Vector2 = (a + b) * 0.5
+    if gap < 1.0 or rig == null:
         return
-    if _pinch > 1.0 and rig != null:
+    if _pinch > 1.0:
         rig.zoom_by((_pinch - gap) / _pinch)
+        rig.orbit_by(mid - _mid)
     _pinch = gap
+    _mid = mid
 
 
 func _up(index: int) -> void:
     var who: String = _owners.get(index, "")
     _owners.erase(index)
     _points.erase(index)
-    _pinch = 0.0   # a finger left, so the gap starts again from scratch
+    if who == "orbit":
+        # a flick across a flat view turns it a quarter, like Q and E do
+        if rig != null and not rig.is_free() and _points.is_empty():
+            var across: float = get_viewport().get_visible_rect().size.x * SWIPE
+            if absf(_swipe.x) > across and absf(_swipe.x) > absf(_swipe.y):
+                rig.rotate_steps(1 if _swipe.x < 0.0 else -1)
+        _swipe = Vector2.ZERO
+        _restart_pinch()
     if who == "stick":
         _release_moves()
         _place(_stick_knob, _stick_home, _stick_radius * 0.42, true)
@@ -388,3 +425,21 @@ func _release_soon(action: String) -> void:
 func _lit(node: Panel, on: bool) -> void:
     var sb: StyleBoxFlat = node.get_theme_stylebox("panel")
     sb.bg_color = Color(Look.CYAN.r, Look.CYAN.g, Look.CYAN.b, 0.32) if on else Color(0.08, 0.075, 0.13, 0.55)
+
+
+## Which view you are in, shown on the bar. Without this the ORBIT button is a
+## toggle with nothing to say whether it is on, which reads as it not working.
+func _process(_delta: float) -> void:
+    if rig == null or _portrait.visible:
+        return
+    var current := "cam_free" if rig.is_free() else ("cam_side" if rig.is_side() else "cam_top")
+    for h in _hits:
+        if not h.has("bar"):
+            continue
+        var node: Panel = h["node"]
+        var sb: StyleBoxFlat = node.get_theme_stylebox("panel")
+        if int(_held.get(h["action"], 0)) > 0:
+            continue  # a finger is on it; leave the press colour alone
+        var on: bool = h["action"] == current
+        sb.bg_color = Color(Look.GOLD.r, Look.GOLD.g, Look.GOLD.b, 0.22) if on else Color(0.08, 0.075, 0.13, 0.55)
+        sb.border_color = Color(Look.GOLD.r, Look.GOLD.g, Look.GOLD.b, 0.7) if on else Color(1, 1, 1, 0.22)
