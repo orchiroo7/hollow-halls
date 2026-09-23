@@ -10,11 +10,22 @@ desktop nothing changes — the keys work as they always did.
 
 ## Rebuilding it
 
-From the game folder, with the Godot 4.7.2 web export templates installed:
+From the repo root, with the Godot 4.7.2 web export templates installed:
 
 ```bash
-godot --headless --path . --export-release "Web"
+python tools/build_web.py
 ```
+
+Use that rather than calling Godot directly. It exports, and then stamps the
+game pack's URL with a hash of its own contents - `index.pck?v=<hash>` - because
+GitHub Pages serves everything with `Cache-Control: max-age=600`. Without the
+stamp, for ten minutes after a push a browser that has been here before keeps
+running the *old* build, which during debugging looks exactly like your fix not
+working.
+
+index.html is cached the same way, so to force the newest build right now, load
+the page with a query string you have not used before -
+`…/hollow-halls/?v=7` - or use a private tab.
 
 The preset lives in `../hollow_halls_25d/export_presets.cfg`. Two things in it
 matter:
