@@ -11,7 +11,7 @@ const SIDE := 1
 
 var shots_dir := ""
 var game = null
-const EXPECTED_CHECKS := 148
+const EXPECTED_CHECKS := 152
 
 var failures := 0
 var checks := 0
@@ -227,7 +227,7 @@ func _test_free_orbit() -> void:
     await _place(Vector3(0, 0.8, 0))
     await _wait(0.3)
 
-    for action in ["cam_free", "cam_tilt_up", "cam_tilt_down", "cam_closer", "cam_further"]:
+    for action in ["cam_free", "cam_closer", "cam_further"]:
         _check(InputMap.has_action(action), "%s is bound" % action)
 
     # 3 opens the orbit: real perspective, lights on, nothing pretending to be flat
@@ -249,17 +249,48 @@ func _test_free_orbit() -> void:
     var yaw0: float = rig.free_yaw
     await _hold("cam_right", 0.5)
     _check(rig.free_yaw > yaw0 + 0.2, "E swings the orbit round you (%.2f rad)" % (rig.free_yaw - yaw0))
-    var pitch0: float = rig.free_pitch
-    await _hold("cam_tilt_up", 0.4)
-    _check(rig.free_pitch < pitch0 - 0.1, "T lifts the camera towards straight down (%.2f rad)" % rig.free_pitch)
-    await _hold("cam_tilt_up", 3.0)
-    _check(rig.free_pitch >= rig.FREE_MIN_PITCH - 0.01, "and stops at straight down rather than rolling over")
-    await _hold("cam_tilt_down", 1.0)
+    # the zoom keys, pressed as keys: an action the suite presses by name would
+    # still pass with the key binding broken
     var dist0: float = rig.free_dist
-    await _hold("cam_further", 0.6)
-    _check(rig.free_dist > dist0 + 1.0, "- pushes the camera out (%.1f m)" % rig.free_dist)
-    await _hold("cam_closer", 0.6)
-    _check(rig.free_dist < rig.FREE_MAX_DIST and rig.free_dist > rig.FREE_MIN_DIST, "+ pulls it back in, inside its limits (%.1f m)" % rig.free_dist)
+    await _hold_key(KEY_MINUS, 0.6)
+    _check(rig.free_dist > dist0 + 1.0, "the - key pushes the camera out (%.1f -> %.1f m)" % [dist0, rig.free_dist])
+    var dist1: float = rig.free_dist
+    await _hold_key(KEY_EQUAL, 0.6)
+    _check(rig.free_dist < dist1 - 1.0, "the = key pulls it back in (%.1f m)" % rig.free_dist)
+    await _hold_key(KEY_MINUS, 6.0)
+    _check(rig.free_dist <= rig.FREE_MAX_DIST + 0.01, "and it stops at arm's length (%.1f m)" % rig.free_dist)
+    await _hold_key(KEY_EQUAL, 8.0)
+    _check(rig.free_dist >= rig.FREE_MIN_DIST - 0.01, "and cannot be pushed through the player (%.1f m)" % rig.free_dist)
+
+    rig.free_dist = 26.0  # back to a normal distance for what follows
+
+    # the middle mouse button grabs the camera: drag left, camera goes left
+    var yaw_grab: float = rig.free_yaw
+    var pitch_grab: float = rig.free_pitch
+    _middle_drag(Vector2(-120, 0))
+    await get_tree().process_frame
+    _check(rig.free_yaw < yaw_grab - 0.1, "middle-dragging left takes the camera left (%.2f rad)" % (rig.free_yaw - yaw_grab))
+    _middle_drag(Vector2(240, 0))
+    await get_tree().process_frame
+    _check(rig.free_yaw > yaw_grab + 0.1, "and dragging right takes it right (%.2f rad)" % (rig.free_yaw - yaw_grab))
+    _middle_drag(Vector2(0, 90))
+    await get_tree().process_frame
+    _check(rig.free_pitch > pitch_grab, "dragging down lowers it (%.2f rad)" % rig.free_pitch)
+    _check(not InputMap.has_action("cam_tilt_up"), "the T / G tilt is gone")
+
+    # and the walking controls still line up with the camera afterwards
+    _middle_drag(Vector2(-300, 0))
+    await get_tree().process_frame
+    await _place(Vector3(0, 0.8, 0))
+    await _wait(0.3)
+    var right_now: Vector3 = rig.right_axis()
+    var was: Vector3 = game.player.global_position
+    await _hold("move_right", 0.6)
+    await _wait(0.2)
+    var went: Vector3 = game.player.global_position - was
+    went.y = 0.0
+    _check(went.length() > 0.8, "you still walk after grabbing the camera (%.1f m)" % went.length())
+    _check(went.normalized().dot(right_now) > 0.8, "and D still goes screen-right (dot %.2f)" % went.normalized().dot(right_now))
     _check(rig.camera.position.z > 0.0, "the camera really is out at that distance")
     await _shot("09_free_orbit")
 
@@ -996,6 +1027,34 @@ func _press(action: String) -> void:
     up.pressed = false
     get_viewport().push_input(up)
     await get_tree().process_frame
+
+
+## A real key, held down, rather than an action pressed by name. This goes
+## through Input.parse_input_event rather than the viewport, because only that
+## path updates the POLLED action state that Input.get_axis reads - pushing a
+## key event at the viewport reaches _input() and nothing else.
+func _hold_key(key: Key, t: float) -> void:
+    var down := InputEventKey.new()
+    down.physical_keycode = key
+    down.pressed = true
+    Input.parse_input_event(down)
+    await get_tree().process_frame
+    await _wait(t)
+    var up := InputEventKey.new()
+    up.physical_keycode = key
+    up.pressed = false
+    Input.parse_input_event(up)
+    await get_tree().process_frame
+    await get_tree().process_frame
+
+
+## A middle-button drag of the given size, in one go.
+func _middle_drag(by: Vector2) -> void:
+    var ev := InputEventMouseMotion.new()
+    ev.button_mask = MOUSE_BUTTON_MASK_MIDDLE
+    ev.relative = by
+    ev.position = get_viewport().get_visible_rect().size * 0.5
+    get_viewport().push_input(ev)
 
 
 func _hold(action: String, t: float) -> void:

@@ -179,7 +179,7 @@ func set_camera(view_name: String, side: bool, free := false) -> void:
     tw.set_ignore_time_scale(true)
     tw.tween_property(_cam_label, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK)
     if free:
-        _hint_label.text = "WASD move (relative to the camera)     SPACE jump     K attack     SHIFT dash\nQ / E orbit     T / G raise and lower     + / - zoom     middle-drag or wheel with a mouse     1 / 2 / TAB back to a flat view"
+        _hint_label.text = "WASD move (relative to the camera)     SPACE jump     K attack     SHIFT dash\nQ / E orbit     + / - zoom     middle-drag grabs the camera, wheel zooms     1 / 2 / TAB back to a flat view"
     elif side:
         _hint_label.text = "A/D move     SPACE jump     K attack  (hold W / S to aim, S midair = pogo)     SHIFT dash     F focus-heal\nTAB top view          Q / E turn the view          3 free orbit          R respawn"
     else:

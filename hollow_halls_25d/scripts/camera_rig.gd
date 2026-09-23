@@ -44,8 +44,7 @@ const FREE_FOV := 55.0
 const FREE_TIME := 0.9
 const FREE_NAME := "FREE ORBIT"
 const ORBIT_SPEED := 1.5    # radians a second on Q / E
-const TILT_SPEED := 1.1     # radians a second on T / G
-const ZOOM_SPEED := 1.1     # fraction of the distance a second on + / -
+const ZOOM_SPEED := 1.6     # fraction of the distance a second on + / -
 const MOUSE_ORBIT := 0.006  # radians a pixel, dragging with the middle button
 const WHEEL_STEP := 0.12
 const FREE_MIN_DIST := 5.0
@@ -305,15 +304,12 @@ func _apply() -> void:
     camera.far = dist + 150.0
 
 
-## Steering the orbit. Q / E swing round you, T / G raise and lower the camera,
-## + / - pull in and push out; the middle mouse button drags, the wheel zooms.
+## Steering the orbit. Q / E swing round you and + / - pull in and push out;
+## the middle mouse button grabs the camera, and the wheel zooms.
 func _orbit(real: float) -> void:
     var turn := Input.get_axis("cam_left", "cam_right")
     if turn != 0.0:
         free_yaw += turn * ORBIT_SPEED * real
-    var tilt := Input.get_axis("cam_tilt_down", "cam_tilt_up")
-    if tilt != 0.0:
-        free_pitch = clampf(free_pitch - tilt * TILT_SPEED * real, FREE_MIN_PITCH, FREE_MAX_PITCH)
     var dolly := Input.get_axis("cam_closer", "cam_further")
     if dolly != 0.0:
         zoom_by(dolly * ZOOM_SPEED * real)
@@ -324,7 +320,8 @@ func zoom_by(amount: float) -> void:
     free_dist = clampf(free_dist * (1.0 + amount), FREE_MIN_DIST, FREE_MAX_DIST)
 
 
-## Swing the orbit by a drag across the screen. Mouse and finger both.
+## Swing the orbit by a drag across the screen, the way a finger looks around:
+## the view turns towards the drag.
 func orbit_by(pixels: Vector2) -> void:
     if not free:
         return
@@ -332,12 +329,22 @@ func orbit_by(pixels: Vector2) -> void:
     free_pitch = clampf(free_pitch - pixels.y * MOUSE_ORBIT, FREE_MIN_PITCH, FREE_MAX_PITCH)
 
 
+## Take hold of the camera itself and move it, the way the middle button does
+## in a 3D package: drag left and the camera goes left, drag down and it drops.
+## The opposite sign to orbit_by, which turns the view rather than the camera.
+func grab_by(pixels: Vector2) -> void:
+    if not free:
+        return
+    free_yaw += pixels.x * MOUSE_ORBIT
+    free_pitch = clampf(free_pitch + pixels.y * MOUSE_ORBIT, FREE_MIN_PITCH, FREE_MAX_PITCH)
+
+
 func _unhandled_input(event: InputEvent) -> void:
     if not free:
         return
     if event is InputEventMouseMotion:
         if (event.button_mask & MOUSE_BUTTON_MASK_MIDDLE) != 0:
-            orbit_by(event.relative)
+            grab_by(event.relative)
     elif event is InputEventMouseButton and event.pressed:
         if event.button_index == MOUSE_BUTTON_WHEEL_UP:
             zoom_by(-WHEEL_STEP)

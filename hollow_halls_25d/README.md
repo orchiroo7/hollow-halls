@@ -24,9 +24,9 @@ godot --path .
 | `1` / `2` | top view / side view |
 | `3` | free orbit, and back again |
 | `Q` / `E` | turn the view 90° left / right (in the orbit, hold to swing round) |
-| `T` / `G` | orbit only: raise and lower the camera |
 | `+` / `-` | orbit only: pull in and push out |
-| middle-drag, wheel | orbit only, with a mouse |
+| middle-drag | orbit only: grabs the camera and moves it, as in a 3D package |
+| wheel | orbit only: zoom |
 | touch | on a touch screen the game grows its own controls - see **On a phone** |
 
 There are two flat views and, behind key `3`, a third that stops pretending -
@@ -88,7 +88,12 @@ The bar is where the view is chosen, and it marks the one you are in:
   quarter at a time, exactly as `Q` and `E` do on a keyboard. Nothing else moves
   them - dragging across a flat view does nothing at all, so no stray touch can
   knock it off square.
-- **ORBIT** hands the camera to your fingers. A drag anywhere empty looks
+- **ORBIT** hands the camera over. On a keyboard `Q`/`E` swing it and `+`/`-`
+  zoom; with a mouse, the wheel zooms and the middle button grabs the camera
+  itself - drag left and the camera goes left, drag down and it drops. That is
+  the opposite sign to a look control, and deliberately so: one turns the view,
+  the other moves the camera.
+- On a touch screen, **ORBIT** hands the camera to your fingers. A drag anywhere empty looks
   around, the way it does in a phone shooter, and two fingers pinch to zoom.
   Those gestures exist only here; outside the orbit they are inert.
 
@@ -159,7 +164,7 @@ the flag:
 godot --path . --resolution 1280x720 ++ --autopilot --shots C:/some/dir
 ```
 
-It drives the real inputs and asserts 148 things, among them: attack is on K, the two flat
+It drives the real inputs and asserts 152 things, among them: attack is on K, the two flat
 views plus the orbit, at rest both are flat (1° lens, no sun) with the side view dead
 level, a switch opens into perspective (42°) with the sun up mid-swing and
 passes through the angles in between (sampled every frame), gameplay is paused
