@@ -11,7 +11,7 @@ const SIDE := 1
 
 var shots_dir := ""
 var game = null
-const EXPECTED_CHECKS := 147
+const EXPECTED_CHECKS := 148
 
 var failures := 0
 var checks := 0
@@ -387,32 +387,37 @@ func _test_touch() -> void:
     _check(Input.get_action_strength("move_right") == 0.0, "letting go stops you")
 
     # the stick stays put: touching empty floor well away from it is not a stick
-    # - and a drag that long across a flat view is a flick, so it turns the view
     var far_left := Vector2(rect.x * 0.42, rect.y * 0.35)
-    var yaw_before: int = game.rig.yaw_degrees()
     await _touch(0, far_left, true)
     await _touch_drag(0, far_left, far_left + Vector2(120, 0))
     _check(Input.get_action_strength("move_right") == 0.0, "touching away from the stick does not steer you")
     _check(t.stick_centre() == home, "and the stick has not moved to the finger")
     await _touch(0, far_left + Vector2(120, 0), false)
-    await _settle()
-    _check(game.rig.yaw_degrees() == posmod(yaw_before - 90, 360),
-        "flicking across a flat view turns it a quarter (%d -> %d)" % [yaw_before, game.rig.yaw_degrees()])
 
-    # two fingers are the camera in any view, so they open the orbit themselves
+    # a flat view is only ever turned in quarters, by the arrows: dragging
+    # across one must leave it exactly where it was
     await _set_camera(TOP, 0)
-    var f1 := Vector2(rect.x * 0.55, rect.y * 0.32)
-    var f2 := Vector2(rect.x * 0.75, rect.y * 0.32)
-    await _touch(1, f1, true)
-    await _touch(2, f2, true)
-    _check(game.rig.is_free(), "two fingers on a flat view go straight into the orbit")
-    var pitch_before: float = game.rig.free_pitch
-    await _touch_drag(1, f1, f1 + Vector2(0, 70))
-    await _touch_drag(2, f2, f2 + Vector2(0, 70))
-    _check(absf(game.rig.free_pitch - pitch_before) > 0.1,
-        "and moving them together swings it (%.2f rad)" % (game.rig.free_pitch - pitch_before))
-    await _touch(1, f1 + Vector2(0, 70), false)
-    await _touch(2, f2 + Vector2(0, 70), false)
+    var yaw_flat: int = game.rig.yaw_degrees()
+    var pitch_flat: float = game.rig.pitch
+    await _touch(0, far_left, true)
+    await _touch_drag(0, far_left, far_left + Vector2(260, 90))
+    await _touch(0, far_left + Vector2(260, 90), false)
+    await _wait(0.3)
+    _check(game.rig.yaw_degrees() == yaw_flat and is_equal_approx(game.rig.pitch, pitch_flat),
+        "dragging a flat view does nothing to it (%d deg)" % game.rig.yaw_degrees())
+    _check(not game.rig.is_free(), "and does not drop you into the orbit")
+
+    # the arrows turn it a quarter, exactly as Q and E do on a keyboard
+    await _touch(0, t.hit_centre("cam_right"), true)
+    await _touch(0, t.hit_centre("cam_right"), false)
+    await _settle()
+    _check(game.rig.yaw_degrees() == posmod(yaw_flat + 90, 360),
+        "the right arrow turns a flat view 90 deg (%d -> %d)" % [yaw_flat, game.rig.yaw_degrees()])
+    await _touch(0, t.hit_centre("cam_left"), true)
+    await _touch(0, t.hit_centre("cam_left"), false)
+    await _settle()
+    _check(game.rig.yaw_degrees() == yaw_flat, "and the left arrow turns it back (%d)" % game.rig.yaw_degrees())
+
     await _set_camera(TOP, 0)
     await _place(Vector3(0, 0.8, 0))
     await _wait(0.3)

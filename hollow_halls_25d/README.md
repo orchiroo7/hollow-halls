@@ -82,18 +82,15 @@ and on a touch screen `scripts/touch.gd` adds on-screen controls: a stick in the
 bottom-left corner, JUMP / ATTACK / DASH under the right thumb, and a camera bar
 of TOP / SIDE / ORBIT with turn arrows either side.
 
-Everything that is not a button belongs to the camera, and the camera is
-available at any time rather than only inside a mode:
+The bar is where the view is chosen, and it marks the one you are in:
 
-- **Two fingers, in any view**, are always the camera - drag them to swing the
-  orbit, pinch to zoom, both at once like a map. From a flat view they open the
-  orbit on the way, because reaching for two fingers is already the request.
-- **One finger on empty screen, in the orbit**, swings it round the player.
-- **One finger flicked across a flat view** turns it a quarter, the way `Q` and
-  `E` do. A short drag does nothing, so a stray touch cannot spin your map.
-
-The camera bar marks the view you are in, so the ORBIT toggle is never
-ambiguous.
+- **TOP and SIDE** are the flat views. The arrows either side turn them a
+  quarter at a time, exactly as `Q` and `E` do on a keyboard. Nothing else moves
+  them - dragging across a flat view does nothing at all, so no stray touch can
+  knock it off square.
+- **ORBIT** hands the camera to your fingers. A drag anywhere empty looks
+  around, the way it does in a phone shooter, and two fingers pinch to zoom.
+  Those gestures exist only here; outside the orbit they are inert.
 
 It is purely additive. The touch layer presses the same input actions the keys
 do - with a strength, so the stick is analogue - and nothing else in the game
@@ -162,7 +159,7 @@ the flag:
 godot --path . --resolution 1280x720 ++ --autopilot --shots C:/some/dir
 ```
 
-It drives the real inputs and asserts 147 things, among them: attack is on K, the two flat
+It drives the real inputs and asserts 148 things, among them: attack is on K, the two flat
 views plus the orbit, at rest both are flat (1° lens, no sun) with the side view dead
 level, a switch opens into perspective (42°) with the sun up mid-swing and
 passes through the angles in between (sampled every frame), gameplay is paused

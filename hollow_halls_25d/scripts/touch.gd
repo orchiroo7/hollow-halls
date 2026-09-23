@@ -32,7 +32,7 @@ const CAMERA_BAR := [
 const DEAD_ZONE := 0.16
 const STICK_GRAB := 1.35   # you may grab the stick a little outside its ring
 const STICK_NUDGE := 0.035 # in from the corner, as a fraction of the short side
-const SWIPE := 0.07        # of the screen's width, to count as a flick
+const LOOK_ACROSS := PI    # a drag right across the screen turns you half a turn
 
 var rig = null
 
@@ -47,7 +47,6 @@ var _owners: Dictionary = {}   # touch index -> "stick" | "orbit" | an action na
 var _points: Dictionary = {}   # the camera's fingers
 var _pinch := 0.0              # last gap between two of them
 var _mid := Vector2.ZERO       # and the point between them
-var _swipe := Vector2.ZERO     # how far a one-finger flat-view drag has gone
 var _held: Dictionary = {}     # action -> how many fingers are on it
 
 
@@ -269,16 +268,12 @@ func _down(index: int, pos: Vector2) -> void:
         _owners[index] = "stick"
         _drag_stick(pos)
     else:
-        # anywhere else is the camera's
+        # empty screen belongs to the camera, but only in the orbit: the flat
+        # views are turned in quarters with the arrows, and a stray drag must
+        # never knock them off square
         _owners[index] = "orbit"
         _points[index] = pos
-        _swipe = Vector2.ZERO
         if _points.size() >= 2:
-            # two fingers are always the camera, in any view. If this is a flat
-            # one, that means going into the orbit first - which is exactly what
-            # someone reaching for two fingers is asking for.
-            if rig != null and not rig.is_free():
-                rig.toggle_free()
             _restart_pinch()
 
 
@@ -288,16 +283,22 @@ func _drag(index: int, pos: Vector2, relative: Vector2) -> void:
             _drag_stick(pos)
         "orbit":
             _points[index] = pos
+            if rig == null or not rig.is_free():
+                return
             if _points.size() >= 2:
                 _two_finger()
-            elif rig == null:
-                pass
-            elif rig.is_free():
-                rig.orbit_by(relative)
             else:
-                _swipe += relative  # a flat view: this might turn out to be a flick
+                rig.orbit_by(relative * _look_gain())
         _:
             pass
+
+
+## A drag is measured in viewport units, which are not screen pixels - the
+## stretch mode sees to that - so the look speed is set against the width of
+## the screen rather than left to whatever the scale happens to be.
+func _look_gain() -> float:
+    var wide: float = maxf(get_viewport().get_visible_rect().size.x, 1.0)
+    return LOOK_ACROSS / (wide * rig.MOUSE_ORBIT)
 
 
 func _restart_pinch() -> void:
@@ -323,7 +324,7 @@ func _two_finger() -> void:
         return
     if _pinch > 1.0:
         rig.zoom_by((_pinch - gap) / _pinch)
-        rig.orbit_by(mid - _mid)
+        rig.orbit_by((mid - _mid) * _look_gain())
     _pinch = gap
     _mid = mid
 
@@ -333,12 +334,6 @@ func _up(index: int) -> void:
     _owners.erase(index)
     _points.erase(index)
     if who == "orbit":
-        # a flick across a flat view turns it a quarter, like Q and E do
-        if rig != null and not rig.is_free() and _points.is_empty():
-            var across: float = get_viewport().get_visible_rect().size.x * SWIPE
-            if absf(_swipe.x) > across and absf(_swipe.x) > absf(_swipe.y):
-                rig.rotate_steps(1 if _swipe.x < 0.0 else -1)
-        _swipe = Vector2.ZERO
         _restart_pinch()
     if who == "stick":
         _release_moves()
