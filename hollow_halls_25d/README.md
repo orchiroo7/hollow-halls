@@ -88,6 +88,11 @@ The bar is where the view is chosen, and it marks the one you are in:
   quarter at a time, exactly as `Q` and `E` do on a keyboard. Nothing else moves
   them - dragging across a flat view does nothing at all, so no stray touch can
   knock it off square.
+While you are moving the camera - `Q`/`E` held, the middle button down, a
+finger on the screen - the walking directions are **latched** to where they
+were. Without that, holding a direction through an orbit turns the basis under
+you and walks you in a circle instead of a line.
+
 - **ORBIT** hands the camera over. On a keyboard `Q`/`E` swing it and `+`/`-`
   zoom; with a mouse, the wheel zooms and the middle button grabs the camera
   itself - drag left and the camera goes left, drag down and it drops. That is
@@ -164,7 +169,7 @@ the flag:
 godot --path . --resolution 1280x720 ++ --autopilot --shots C:/some/dir
 ```
 
-It drives the real inputs and asserts 152 things, among them: attack is on K, the two flat
+It drives the real inputs and asserts 159 things, among them: attack is on K, the two flat
 views plus the orbit, at rest both are flat (1° lens, no sun) with the side view dead
 level, a switch opens into perspective (42°) with the sun up mid-swing and
 passes through the angles in between (sampled every frame), gameplay is paused

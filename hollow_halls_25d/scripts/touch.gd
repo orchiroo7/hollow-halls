@@ -273,6 +273,8 @@ func _down(index: int, pos: Vector2) -> void:
         # never knock them off square
         _owners[index] = "orbit"
         _points[index] = pos
+        if rig != null:
+            rig.grabbing = true   # hold the walking directions still meanwhile
         if _points.size() >= 2:
             _restart_pinch()
 
@@ -334,6 +336,8 @@ func _up(index: int) -> void:
     _owners.erase(index)
     _points.erase(index)
     if who == "orbit":
+        if rig != null and _points.is_empty():
+            rig.grabbing = false
         _restart_pinch()
     if who == "stick":
         _release_moves()

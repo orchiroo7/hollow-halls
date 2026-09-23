@@ -11,7 +11,7 @@ const SIDE := 1
 
 var shots_dir := ""
 var game = null
-const EXPECTED_CHECKS := 152
+const EXPECTED_CHECKS := 159
 
 var failures := 0
 var checks := 0
@@ -263,6 +263,45 @@ func _test_free_orbit() -> void:
     _check(rig.free_dist >= rig.FREE_MIN_DIST - 0.01, "and cannot be pushed through the player (%.1f m)" % rig.free_dist)
 
     rig.free_dist = 26.0  # back to a normal distance for what follows
+
+    # the orbit must move the CAMERA round a player who stays put on screen
+    await _place(Vector3(0, 0.8, 0))
+    await _wait(0.5)
+    var cam_was: Vector3 = rig.camera.global_position
+    var on_screen_was: Vector2 = rig.camera.unproject_position(game.player.global_position)
+    var player_was: Vector3 = game.player.global_position
+    await _hold("cam_right", 1.0)
+    await _wait(0.3)
+    var cam_now: Vector3 = rig.camera.global_position
+    var on_screen_now: Vector2 = rig.camera.unproject_position(game.player.global_position)
+    _log("    orbit: camera %s -> %s | player on screen %s -> %s | player moved %.2f m"
+        % [cam_was, cam_now, on_screen_was, on_screen_now, game.player.global_position.distance_to(player_was)])
+    _check(cam_was.distance_to(cam_now) > 3.0, "holding E moves the camera itself (%.1f m)" % cam_was.distance_to(cam_now))
+    _check(game.player.global_position.distance_to(player_was) < 0.2, "while the player stays put in the world")
+    _check(on_screen_was.distance_to(on_screen_now) < 60.0,
+        "and stays put on screen (%.0f px)" % on_screen_was.distance_to(on_screen_now))
+
+    # latching: holding a direction through an orbit walks a straight line. The
+    # basis would otherwise turn under you and curve you round in a circle.
+    await _place(Vector3(0, 0.8, 0))
+    await _wait(0.4)
+    var straight: Vector3 = rig.right_axis()
+    var from_here: Vector3 = game.player.global_position
+    Input.action_press("move_right")
+    Input.action_press("cam_right")
+    await _wait(0.3)
+    _check(rig.latched(), "moving the camera latches the walking directions")
+    await _wait(0.5)
+    Input.action_release("move_right")
+    Input.action_release("cam_right")
+    await get_tree().physics_frame
+    var went_far: Vector3 = game.player.global_position - from_here
+    went_far.y = 0.0
+    _check(went_far.length() > 2.0, "you keep walking while the camera swings (%.1f m)" % went_far.length())
+    _check(went_far.normalized().dot(straight) > 0.95,
+        "in a straight line, not a circle (dot %.2f)" % went_far.normalized().dot(straight))
+    await _wait(0.3)
+    _check(not rig.latched(), "and they follow the camera again once you let go")
 
     # the middle mouse button grabs the camera: drag left, camera goes left
     var yaw_grab: float = rig.free_yaw

@@ -66,6 +66,7 @@ var free := false
 var free_yaw := 0.0
 var free_pitch := -0.6
 var free_dist := 26.0
+var grabbing := false          # the middle button, or a finger on the camera
 
 ## Live camera state. `depth` is how far into the 3D reveal we are: 0 flat, 1 full.
 var pitch := -PI * 0.5
@@ -73,6 +74,8 @@ var yaw := 0.0
 var frame_height := 24.0
 var depth := 0.0
 
+var _latched := false
+var _latch_yaw := 0.0
 var _swinging := false
 var _mode: int = Swing.REVEAL
 var _peak := REVEAL_FOV
@@ -151,6 +154,24 @@ func is_free() -> bool:
     return free
 
 
+## While you are moving the camera, the walking directions stop following it.
+## Without this, holding a direction through an orbit walks you in a circle:
+## the basis keeps turning under you and the input never changes.
+func _latch(on: bool) -> void:
+    if on and not _latched:
+        _latch_yaw = free_yaw
+    _latched = on
+
+
+func latched() -> bool:
+    return _latched
+
+
+## The yaw the movement keys are read against - held still during an orbit.
+func control_yaw() -> float:
+    return _latch_yaw if _latched else target_yaw()
+
+
 ## Metres visible top to bottom at the player, for the orbit's current distance.
 func free_frame_height() -> float:
     return 2.0 * free_dist * tan(deg_to_rad(FREE_FOV) * 0.5)
@@ -187,14 +208,14 @@ func view_name() -> String:
 ## Screen-right, flattened onto the ground. Read from where the camera is
 ## going, not where it is mid-swing, so controls settle the instant you press.
 func right_axis() -> Vector3:
-    var y := target_yaw()
+    var y := control_yaw()
     return Vector3(cos(y), 0.0, -sin(y))
 
 
 ## Screen-up in the top view (away from the camera), flattened onto the ground.
 ## In the side view this is the depth axis, which the player is locked out of.
 func forward_axis() -> Vector3:
-    var y := target_yaw()
+    var y := control_yaw()
     return Vector3(-sin(y), 0.0, -cos(y))
 
 
@@ -247,6 +268,14 @@ func _process(delta: float) -> void:
 
     if free and not _swinging:
         _orbit(real)
+        # and then actually move: steering sets where the camera should be,
+        # this is what puts it there
+        pitch = free_pitch
+        yaw = free_yaw
+        frame_height = free_frame_height()
+        depth = 1.0
+    elif not free:
+        _latch(false)
 
     if _swinging:
         _t = minf(1.0, _t + real / _duration)
@@ -308,6 +337,7 @@ func _apply() -> void:
 ## the middle mouse button grabs the camera, and the wheel zooms.
 func _orbit(real: float) -> void:
     var turn := Input.get_axis("cam_left", "cam_right")
+    _latch(turn != 0.0 or grabbing)
     if turn != 0.0:
         free_yaw += turn * ORBIT_SPEED * real
     var dolly := Input.get_axis("cam_closer", "cam_further")
@@ -340,6 +370,8 @@ func grab_by(pixels: Vector2) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+    if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_MIDDLE:
+        grabbing = event.pressed   # tracked even out of the orbit, so it cannot stick
     if not free:
         return
     if event is InputEventMouseMotion:
