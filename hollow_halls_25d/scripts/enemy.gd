@@ -1,8 +1,4 @@
 extends CharacterBody3D
-## Hallway enemies, as boxes in 3D.
-##   walker - patrols along its corridor, turns at ledges and walls, chases you
-##            when you are close and level with it (but will not walk off edges)
-##   flyer  - bobs in place until it spots you, then homes in through the air
 
 const Meshes := preload("res://scripts/meshes.gd")
 const Look := preload("res://scripts/look.gd")
@@ -14,7 +10,7 @@ const PLAYER_SIZE := Vector3(0.8, 1.4, 0.8)
 var kind := "walker"
 var axis := Vector3(1, 0, 0)
 var game = null
-var home_rects: Array = []  # the hallway this enemy belongs to; it never leaves
+var home_rects: Array = []
 
 var hp := 6
 var max_hp := 6
@@ -63,7 +59,6 @@ func _ready() -> void:
         box.size = size
         cs.shape = box
     else:
-        # walkers cross floor seams too, so they get the capsule treatment
         var cap := CapsuleShape3D.new()
         cap.radius = size.x * 0.45
         cap.height = size.y
@@ -140,8 +135,6 @@ func _walk(delta: float, player) -> void:
             speed = _chase_speed
             chasing = true
 
-    # the world is continuous, so nothing but this keeps enemies out of the
-    # rooms: treat the edge of the home hallway like a ledge
     if not _inside_home(global_position, 0.0):
         var back := _home - global_position
         back.y = 0.0
@@ -160,7 +153,7 @@ func _walk(delta: float, player) -> void:
 
     if leaving or (is_on_floor() and (not _ledge_ray.is_colliding() or _wall_ray.is_colliding())):
         if chasing:
-            desired = Vector3.ZERO  # glare at you from the edge
+            desired = Vector3.ZERO
         else:
             dir = -dir
             desired = axis * dir

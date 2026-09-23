@@ -1,8 +1,4 @@
 extends Node
-## Scripted smoke test. Inert unless the game is launched with:
-##     godot --path . ++ --autopilot [--shots <dir>]
-## Add --camcap to photograph a camera swing frame by frame instead.
-## It drives the real input actions, so it exercises what a player does.
 
 const LevelData := preload("res://scripts/level_data.gd")
 
@@ -11,7 +7,7 @@ const SIDE := 1
 
 var shots_dir := ""
 var game = null
-const EXPECTED_CHECKS := 159
+const EXPECTED_CHECKS := 171
 
 var failures := 0
 var checks := 0
@@ -43,6 +39,10 @@ func _run(args: PackedStringArray) -> void:
     await _test_start()
     _log("--- camera views ---")
     await _test_views()
+    _log("--- language ---")
+    await _test_language()
+    _log("--- the editor preview ---")
+    await _test_preview()
     _log("--- free orbit ---")
     await _test_free_orbit()
     _log("--- on-screen controls ---")
@@ -68,8 +68,6 @@ func _run(args: PackedStringArray) -> void:
     _log("--- death ---")
     await _test_death()
 
-    # a check that quietly did not run is worse than one that failed, so the
-    # number of them is itself checked
     if checks != EXPECTED_CHECKS:
         failures += 1
         _log("  FAIL  ran %d checks, expected %d - something was skipped" % [checks, EXPECTED_CHECKS])
@@ -79,8 +77,6 @@ func _run(args: PackedStringArray) -> void:
     await _wait(0.2)
     get_tree().quit(1 if failures > 0 else 0)
 
-
-# ---------------------------------------------------------------------- tests
 
 func _test_start() -> void:
     _check(game.region_id == "room_a", "starts in room_a (got %s)" % game.region_id)
@@ -99,7 +95,6 @@ func _test_start() -> void:
 
 
 func _test_views() -> void:
-    # the real keys are bound, and the in-between angle is gone
     var keys := {"cam_cycle": KEY_TAB, "cam_left": KEY_Q, "cam_right": KEY_E,
         "cam_top": KEY_1, "cam_side": KEY_2}
     for action in keys.keys():
@@ -115,7 +110,6 @@ func _test_views() -> void:
             attack_keys.append(ev.physical_keycode)
     _check(attack_keys == [KEY_K], "attack is on K and only K (%s)" % str(attack_keys))
 
-    # Q/E in the top view: a flat spin, never the 3D reveal
     await _press("cam_right")
     var spin_depth := 0.0
     var spin_fov := 0.0
@@ -137,13 +131,11 @@ func _test_views() -> void:
     await _press("cam_left")
     await _settle()
 
-    # at rest it is 2D: straight down, effectively orthographic, no light
     _check(absf(rad_to_deg(game.rig.pitch) + 90.0) < 0.1, "top view looks straight down")
     _check(game.rig.looks_flat(), "at rest the top view is flat (fov %.1f°)" % game.rig.camera.fov)
     _check(game.sun.light_energy < 0.01, "at rest there is no sun: no shading, no shadows")
     await _shot("02_top_flat")
 
-    # top -> side: the flat picture opens into 3D, swings, and folds back flat
     var p = game.player
     await _place(Vector3(0, 0.8, 0))
     var before: Vector3 = p.global_position
@@ -168,8 +160,6 @@ func _test_views() -> void:
             between += 1
         if game.rig.depth > 0.5 and game.paused():
             paused_mid = true
-        # no screenshot in here: a slow one blocks the sampling and lets the
-        # swing finish unobserved (the --camcap mode photographs the reveal)
         if frames > 3 and not game.rig.swinging():
             break
     var moved: float = p.global_position.distance_to(before)
@@ -189,7 +179,6 @@ func _test_views() -> void:
     _check(is_equal_approx(game.rig.frame_height, 14.0), "side view frames 14 m of height")
     await _shot("04_side_flat")
 
-    # side -> side: turning the side view plays the same reveal
     await _press("cam_right")
     peak_fov = 0.0
     frames = 0
@@ -208,7 +197,6 @@ func _test_views() -> void:
     await _settle()
     _check(game.rig.yaw_degrees() == 0, "Q turns it back (%d)" % game.rig.yaw_degrees())
 
-    # Tab just flips between the two
     await _press("cam_cycle")
     await _settle()
     _check(game.rig.view == TOP, "TAB flips side -> top")
@@ -221,6 +209,55 @@ func _test_views() -> void:
     _check(game.rig.view == TOP, "TAB flips back to top")
 
 
+const PreviewScript := preload("res://scripts/level_preview.gd")
+const Lang := preload("res://scripts/lang.gd")
+
+
+func _test_language() -> void:
+    _check(InputMap.has_action("lang_toggle"), "8 is bound to the language switch")
+    _check(Lang.japanese(), "it starts in Japanese")
+    var sign_posts := get_tree().get_nodes_in_group("signpost")
+    _check(sign_posts.size() == LevelData.labels().size(), "every signpost is translatable (%d)" % sign_posts.size())
+    var jp_sign: String = sign_posts[0].text if sign_posts.size() > 0 else ""
+    _check(jp_sign == Lang.t(sign_posts[0].get_meta("key")), "and reads in Japanese (%s)" % jp_sign)
+
+    await _press("lang_toggle")
+    await get_tree().process_frame
+    _check(not Lang.japanese(), "8 switches it to English")
+    _check(sign_posts[0].text != jp_sign, "the signposts change with it (%s)" % sign_posts[0].text)
+
+    await _press("lang_toggle")
+    await get_tree().process_frame
+    _check(Lang.japanese(), "and 8 again switches it back")
+    _check(sign_posts[0].text == jp_sign, "with the signposts back to Japanese")
+
+    var missing := 0
+    for key in Lang.TEXT:
+        if Lang.TEXT[key].size() != 2 or String(Lang.TEXT[key][0]) == "" or String(Lang.TEXT[key][1]) == "":
+            missing += 1
+    _check(missing == 0, "every phrase exists in both languages (%d gaps)" % missing)
+
+
+func _test_preview() -> void:
+    var scene_node: Node = game.get_node_or_null("LevelPreview")
+    _check(scene_node == null, "the preview takes itself out of the running game")
+
+    var root := Node3D.new()
+    game.add_child(root)
+    PreviewScript.draw_into(root)
+    await get_tree().process_frame
+    var drawn: int = root.get_child_count()
+    var expected: int = LevelData.solids().size() + LevelData.decor().size()         + LevelData.doors().size() + LevelData.hazards().size()         + LevelData.enemies().size() + LevelData.labels().size() + 1
+    _check(drawn == expected, "it draws every box in the level data (%d of %d)" % [drawn, expected])
+    var meshes := 0
+    for c in root.get_children():
+        if c is MeshInstance3D or c is Label3D:
+            meshes += 1
+    _check(meshes == drawn, "and all of them are something you can see")
+    root.queue_free()
+    await get_tree().process_frame
+
+
 func _test_free_orbit() -> void:
     var rig = game.rig
     await _set_camera(TOP, 0)
@@ -230,7 +267,6 @@ func _test_free_orbit() -> void:
     for action in ["cam_free", "cam_closer", "cam_further"]:
         _check(InputMap.has_action(action), "%s is bound" % action)
 
-    # 3 opens the orbit: real perspective, lights on, nothing pretending to be flat
     await _press("cam_free")
     await _settle()
     _check(rig.is_free(), "3 opens the free orbit")
@@ -245,12 +281,9 @@ func _test_free_orbit() -> void:
             hidden += 1
     _check(hidden == 0, "every enemy and sign is visible again (%d hidden)" % hidden)
 
-    # steering it
     var yaw0: float = rig.free_yaw
     await _hold("cam_right", 0.5)
     _check(rig.free_yaw > yaw0 + 0.2, "E swings the orbit round you (%.2f rad)" % (rig.free_yaw - yaw0))
-    # the zoom keys, pressed as keys: an action the suite presses by name would
-    # still pass with the key binding broken
     var dist0: float = rig.free_dist
     await _hold_key(KEY_MINUS, 0.6)
     _check(rig.free_dist > dist0 + 1.0, "the - key pushes the camera out (%.1f -> %.1f m)" % [dist0, rig.free_dist])
@@ -262,9 +295,8 @@ func _test_free_orbit() -> void:
     await _hold_key(KEY_EQUAL, 8.0)
     _check(rig.free_dist >= rig.FREE_MIN_DIST - 0.01, "and cannot be pushed through the player (%.1f m)" % rig.free_dist)
 
-    rig.free_dist = 26.0  # back to a normal distance for what follows
+    rig.free_dist = 26.0
 
-    # the orbit must move the CAMERA round a player who stays put on screen
     await _place(Vector3(0, 0.8, 0))
     await _wait(0.5)
     var cam_was: Vector3 = rig.camera.global_position
@@ -281,8 +313,6 @@ func _test_free_orbit() -> void:
     _check(on_screen_was.distance_to(on_screen_now) < 60.0,
         "and stays put on screen (%.0f px)" % on_screen_was.distance_to(on_screen_now))
 
-    # latching: holding a direction through an orbit walks a straight line. The
-    # basis would otherwise turn under you and curve you round in a circle.
     await _place(Vector3(0, 0.8, 0))
     await _wait(0.4)
     var straight: Vector3 = rig.right_axis()
@@ -303,7 +333,6 @@ func _test_free_orbit() -> void:
     await _wait(0.3)
     _check(not rig.latched(), "and they follow the camera again once you let go")
 
-    # the middle mouse button grabs the camera: drag left, camera goes left
     var yaw_grab: float = rig.free_yaw
     var pitch_grab: float = rig.free_pitch
     _middle_drag(Vector2(-120, 0))
@@ -317,7 +346,6 @@ func _test_free_orbit() -> void:
     _check(rig.free_pitch > pitch_grab, "dragging down lowers it (%.2f rad)" % rig.free_pitch)
     _check(not InputMap.has_action("cam_tilt_up"), "the T / G tilt is gone")
 
-    # and the walking controls still line up with the camera afterwards
     _middle_drag(Vector2(-300, 0))
     await get_tree().process_frame
     await _place(Vector3(0, 0.8, 0))
@@ -333,7 +361,6 @@ func _test_free_orbit() -> void:
     _check(rig.camera.position.z > 0.0, "the camera really is out at that distance")
     await _shot("09_free_orbit")
 
-    # walking in an arbitrary frame: D goes screen-right whatever the orbit is
     await _place(Vector3(0, 0.8, 0))
     await _wait(0.4)
     var right: Vector3 = rig.right_axis()
@@ -345,7 +372,6 @@ func _test_free_orbit() -> void:
     _check(moved.length() > 0.8, "you can still walk in the orbit (%.1f m)" % moved.length())
     _check(moved.normalized().dot(right) > 0.8, "and D goes screen-right at whatever angle you are orbiting from")
 
-    # and back out to a flat view, square to the world again
     await _press("cam_top")
     await _settle()
     _check(not rig.is_free(), "1 leaves the orbit")
@@ -376,7 +402,6 @@ func _touch_drag(index: int, from_pos: Vector2, to: Vector2) -> void:
     await get_tree().process_frame
 
 
-## The phone build: the same game, driven by fingers instead of keys.
 func _test_touch() -> void:
     await _set_camera(TOP, 0)
     await _place(Vector3(0, 0.8, 0))
@@ -392,7 +417,6 @@ func _test_touch() -> void:
     var t = game.touch
     _check(t != null, "the on-screen controls exist")
 
-    # the buttons are where a thumb can reach and inside the screen
     var rect: Vector2 = get_viewport().get_visible_rect().size
     var orbit_at: Vector2 = t.hit_centre("cam_free")
     var attack_at: Vector2 = t.hit_centre("attack")
@@ -402,7 +426,6 @@ func _test_touch() -> void:
         "jump has the corner, attack sits beside it")
     _check(t.stick_centre().x < rect.x * 0.5 and t.stick_centre().y > rect.y * 0.5, "the stick sits under the left one")
 
-    # tapping ORBIT opens the orbit, tapping TOP closes it
     await _touch(0, orbit_at, true)
     await _touch(0, orbit_at, false)
     await _settle()
@@ -412,7 +435,6 @@ func _test_touch() -> void:
     await _touch_drag(1, Vector2(rect.x * 0.78, rect.y * 0.4), Vector2(rect.x * 0.62, rect.y * 0.4))
     await _touch(1, Vector2(rect.x * 0.62, rect.y * 0.4), false)
     _check(absf(game.rig.free_yaw - yaw0) > 0.1, "dragging the right of the screen swings it (%.2f rad)" % (game.rig.free_yaw - yaw0))
-    # two fingers on empty space pinch the orbit in and out
     var dist0: float = game.rig.free_dist
     var mid := Vector2(rect.x * 0.7, rect.y * 0.45)
     await _touch(1, mid - Vector2(40, 0), true)
@@ -433,7 +455,6 @@ func _test_touch() -> void:
     _check(not game.rig.is_free(), "tapping TOP comes back out")
     _check(game.rig.looks_flat(), "and the picture is flat again")
 
-    # the stick walks you, with a strength rather than all-or-nothing
     await _place(Vector3(0, 0.8, 0))
     await _wait(0.3)
     var home: Vector2 = t.stick_centre()
@@ -456,7 +477,6 @@ func _test_touch() -> void:
     await get_tree().process_frame
     _check(Input.get_action_strength("move_right") == 0.0, "letting go stops you")
 
-    # the stick stays put: touching empty floor well away from it is not a stick
     var far_left := Vector2(rect.x * 0.42, rect.y * 0.35)
     await _touch(0, far_left, true)
     await _touch_drag(0, far_left, far_left + Vector2(120, 0))
@@ -464,8 +484,6 @@ func _test_touch() -> void:
     _check(t.stick_centre() == home, "and the stick has not moved to the finger")
     await _touch(0, far_left + Vector2(120, 0), false)
 
-    # a flat view is only ever turned in quarters, by the arrows: dragging
-    # across one must leave it exactly where it was
     await _set_camera(TOP, 0)
     var yaw_flat: int = game.rig.yaw_degrees()
     var pitch_flat: float = game.rig.pitch
@@ -477,7 +495,6 @@ func _test_touch() -> void:
         "dragging a flat view does nothing to it (%d deg)" % game.rig.yaw_degrees())
     _check(not game.rig.is_free(), "and does not drop you into the orbit")
 
-    # the arrows turn it a quarter, exactly as Q and E do on a keyboard
     await _touch(0, t.hit_centre("cam_right"), true)
     await _touch(0, t.hit_centre("cam_right"), false)
     await _settle()
@@ -492,7 +509,6 @@ func _test_touch() -> void:
     await _place(Vector3(0, 0.8, 0))
     await _wait(0.3)
 
-    # and the action buttons reach the same code the keys do
     game.player.attack_cd = 0.0
     await _touch(0, attack_at, true)
     await get_tree().physics_frame
@@ -510,7 +526,6 @@ func _test_touch() -> void:
 
 func _test_controls() -> void:
     var p = game.player
-    # side-on, yaw 0: right is +X, depth locked
     await _set_camera(SIDE, 0)
     await _place(Vector3(0, 0.8, 0))
     var a: Vector3 = p.global_position
@@ -524,7 +539,6 @@ func _test_controls() -> void:
     b = p.global_position
     _check(absf(b.z - a.z) < 0.05 and absf(b.x - a.x) < 0.05, "side-on: W does not move you in depth (dz %.3f)" % (b.z - a.z))
 
-    # orbit 90°: the same key now walks north, along -Z
     await _set_camera(SIDE, 1)
     await _place(Vector3(0, 0.8, 0))
     a = p.global_position
@@ -532,7 +546,6 @@ func _test_controls() -> void:
     b = p.global_position
     _check(a.z - b.z > 1.5 and absf(b.x - a.x) < 0.05, "side-on yaw 90: D walks -Z (dz %.2f dx %.2f)" % [b.z - a.z, b.x - a.x])
 
-    # top-down: full 8-way, W is north
     await _set_camera(TOP, 0)
     await _place(Vector3(0, 0.8, 0))
     a = p.global_position
@@ -547,7 +560,6 @@ func _test_controls() -> void:
     b = p.global_position
     _check(b.x - a.x > 0.8 and a.z - b.z > 0.8, "top-down: diagonals work (dx %.2f dz %.2f)" % [b.x - a.x, b.z - a.z])
 
-    # jumping works in every view
     await _place(Vector3(0, 0.8, 0))
     await _hold("jump", 0.25)
     _check(p.global_position.y > 1.8, "jump works top-down (y %.2f)" % p.global_position.y)
@@ -593,7 +605,6 @@ func _test_doors() -> void:
     if east == null or b_west == null:
         return
 
-    # far away: shut, and solid
     await _set_camera(SIDE, 0)
     await _place(Vector3(0, 0.8, 0))
     await _wait(1.5)
@@ -602,7 +613,6 @@ func _test_doors() -> void:
     var hit: Dictionary = game.get_world_3d().direct_space_state.intersect_ray(q)
     _check(not hit.is_empty() and hit["collider"] == b_west, "a shut door is solid")
 
-    # walk up to it: it opens by itself before you reach it, and you pass
     await _place(Vector3(5, 0.8, 0))
     Input.action_press("move_right")
     var opened_by := -1.0
@@ -613,14 +623,12 @@ func _test_doors() -> void:
             opened_by = p.global_position.x
     _check(opened_by > 0.0 and opened_by < 10.0, "it slides fully open before you reach it (open at x=%.1f)" % opened_by)
     _check(game.region_id == "hall_1", "and you walk straight through into hall_1")
-    # keep walking until well past: it shuts behind you
-    while p.global_position.x < 18.0 and Time.get_ticks_msec() - t0 < 8000:  # past the 6 m close radius
+    while p.global_position.x < 18.0 and Time.get_ticks_msec() - t0 < 8000:
         await get_tree().physics_frame
     Input.action_release("move_right")
     var closed := await _eventually(func() -> bool: return east.openness < 0.01, 2.0)
     _check(closed, "and slides shut again once you are clear (%.2f)" % east.openness)
 
-    # top view: an open door is off to one side, tucked into the wall
     await _set_camera(TOP, 0)
     await _place(Vector3(9, 0.8, 0))
     await _wait(0.8)
@@ -646,7 +654,6 @@ func _test_entry_buffer() -> void:
     var entered := Time.get_ticks_msec()
     _check(p.is_hidden() and p.unseen > 1.8, "walking into a hallway starts the 2 s buffer (%.2f s)" % p.unseen)
 
-    # unhittable: a direct hit and an enemy's touch both do nothing
     var hp0: int = p.health
     p.take_damage(1, p.global_position + Vector3(1, 0, 0))
     _check(p.health == hp0, "a hit during the buffer does no damage")
@@ -660,7 +667,6 @@ func _test_entry_buffer() -> void:
         _check(absf(walker.velocity.x) < 3.0, "and the enemy does not come for you (vx %.1f)" % walker.velocity.x)
     await _shot("08_entry_buffer")
 
-    # it lasts 2 s, then you are back to normal
     var over := await _eventually(func() -> bool: return not p.is_hidden(), 3.0)
     var lasted := (Time.get_ticks_msec() - entered) / 1000.0
     _check(over and lasted > 1.8 and lasted < 2.6, "the buffer lasts about 2 s (%.2f s)" % lasted)
@@ -668,20 +674,17 @@ func _test_entry_buffer() -> void:
     p.take_damage(1, p.global_position + Vector3(1, 0, 0))
     _check(p.health == hp0 - 1, "after it, hits land again")
 
-    # walking between rooms, or hall to hall, does not grant it
     p.health = 5
-    await _place(Vector3(20, 0.8, 0))  # still hall_1
+    await _place(Vector3(20, 0.8, 0))
     await _wait(0.1)
     p.unseen = 0.0
-    await _place(Vector3(0, 0.8, -20))  # straight into hall_2
+    await _place(Vector3(0, 0.8, -20))
     await _wait(0.1)
     _check(not p.is_hidden(), "going hall to hall does not grant the buffer")
     p.unseen = 0.0
 
 
 func _test_rooms_safe() -> void:
-    # bait: stand just inside room A by the hall_1 opening, where the hall_1
-    # walker can see you, and make sure nothing follows you in
     game.reset_enemies()
     var p = game.player
     p.invuln = 10.0
@@ -699,8 +702,6 @@ func _test_rooms_safe() -> void:
 
 
 func _test_occlusion() -> void:
-    # hall_1 walls: north at z -2.5, south at z +2.5. Side-on at yaw 0 the camera
-    # sits on the +Z side, so the south wall is between it and you.
     await _set_camera(SIDE, 0)
     await _place(Vector3(12.5, 0.8, 0))
     var south := Vector3(30, -1, 2.5)
@@ -709,7 +710,7 @@ func _test_occlusion() -> void:
     _check(not game.rig.is_faded(north), "side-on: the far wall stays solid")
     await _shot("03_hall_1_side")
 
-    await _set_camera(SIDE, 2)  # orbit to the far side: the roles swap
+    await _set_camera(SIDE, 2)
     _check(await _eventually(func() -> bool: return game.rig.is_faded(north)), "orbited 180°: now the other wall fades (%s)" % _wall_debug(north, south))
     _check(await _eventually(func() -> bool: return not game.rig.is_faded(south)), "orbited 180°: and the first wall comes back")
 
@@ -741,21 +742,18 @@ func _test_combat() -> void:
     var soul_before: int = p.soul
     while is_instance_valid(walker) and not walker.dead and swings < 14:
         p.health = 5
-        p.invuln = 2.0  # getting hit cancels a swing; this duel tests dealing damage
+        p.invuln = 2.0
         p.global_position = walker.global_position + Vector3(-1.3, 0.2, 0)
         p.velocity = Vector3.ZERO
         p.facing_vec = Vector3(1, 0, 0)
         await _press("attack")
-        await _wait(0.4)  # hit stop stretches the 0.3s cooldown slightly
+        await _wait(0.4)
         swings += 1
     var killed: bool = not is_instance_valid(walker) or walker.dead
     _check(killed, "walker died from nail hits")
     _check(swings <= 8, "6 hp walker died in %d swings" % swings)
     _check(p.soul > soul_before, "hits gained soul (%d -> %d)" % [soul_before, p.soul])
 
-    # pogo: side view, fall onto an enemy holding down. Use hall_1's walker on
-    # open floor (x 44, nothing overhead) from a fresh spawn - "nearest" by
-    # straight-line distance can pick one in another corridor under a platform.
     game.reset_enemies()
     await get_tree().physics_frame
     var bounced := false
@@ -784,9 +782,6 @@ func _test_combat() -> void:
         await _wait(0.35)
     _check(bounced, "down-slash pogoed off an enemy")
 
-    # top-view slashing hits in whatever direction you face. Done in hall_2,
-    # which runs north-south, so standing south of a walker never puts you
-    # inside a corridor wall.
     await _set_camera(TOP, 0)
     game.reset_enemies()
     await get_tree().physics_frame
@@ -799,8 +794,6 @@ func _test_combat() -> void:
         p.velocity = Vector3.ZERO
         p.facing_vec = Vector3(0, 0, -1)
         var placed: Vector3 = p.global_position
-        # the nail's cooldown does not run down while a camera swing has
-        # gameplay paused, so whatever the last test left on it is still there
         p.attack_cd = 0.0
         p.attack_time = 0.0
         await _press("attack")
@@ -810,7 +803,6 @@ func _test_combat() -> void:
             hp0, hp1, victim.global_position if is_instance_valid(victim) else Vector3.ZERO, placed, p.global_position])
     await _shot("04_combat_top")
 
-    # contact damage
     var biter = _nearest_enemy("", p.global_position)
     _check(biter != null, "found an enemy to be bitten by")
     if biter != null:
@@ -827,7 +819,6 @@ func _test_combat() -> void:
         _check(p.health < hp_before, "touching an enemy costs a mask")
         _check(p.invuln > 0.0, "and grants i-frames")
 
-    # focus
     await _place(Vector3(0, 0.8, 0))
     p.health = 3
     p.soul = 99
@@ -842,13 +833,13 @@ func _test_combat() -> void:
 func _test_spikes() -> void:
     var p = game.player
     game.reset_enemies()
-    await _place(Vector3(13, 0.8, 0))  # stand in hall_1 so its checkpoint is set
+    await _place(Vector3(13, 0.8, 0))
     await _wait(0.3)
     var cp: Vector3 = game.checkpoint
     p.health = 5
     p.invuln = 0.0
     p.unseen = 0.0
-    p.global_position = Vector3(28.5, 0.8, 0)  # over the pit, clear of the stepping stone
+    p.global_position = Vector3(28.5, 0.8, 0)
     p.velocity = Vector3.ZERO
     var hurt := false
     for i in 120:
@@ -860,7 +851,6 @@ func _test_spikes() -> void:
     await _wait(0.3)
     _check(p.global_position.distance_to(cp) < 1.0, "spikes return you to the checkpoint")
 
-    # falling while invulnerable must still rescue you (no falling forever)
     p.invuln = 5.0
     p.global_position = Vector3(28.5, 0.8, 0)
     p.velocity = Vector3.ZERO
@@ -882,7 +872,6 @@ func _test_regions() -> void:
         await _place(spots[id])
         await _wait(0.1)
         _check(game.region_id == id, "%s is where it should be (got %s)" % [id, game.region_id])
-    # the far bend of hall_3 and the way into room_b
     await _place(Vector3(60, 0.8, -35))
     await _wait(0.1)
     _check(game.region_id == "hall_3", "hall_3 south leg is hall_3")
@@ -891,7 +880,6 @@ func _test_regions() -> void:
     await _wait(0.7)
     await _shot("05_hall_2_side_orbited")
 
-    # side view is one slice: enemies from other corridors must not show
     var shown_here := 0
     var ghosts := ""
     for e in get_tree().get_nodes_in_group("enemy"):
@@ -939,8 +927,6 @@ func _test_death() -> void:
     _check(is_equal_approx(Engine.time_scale, 1.0), "time scale restored")
 
 
-# -------------------------------------------------------------------- capture
-
 func _capture_swing() -> void:
     game.player.invuln = 60.0
     await _set_camera(TOP, 0)
@@ -961,8 +947,6 @@ func _capture_swing() -> void:
     await _shot("hall_2_side_flat")
 
 
-# -------------------------------------------------------------------- helpers
-
 func _set_camera(view: int, yaw_steps: int) -> void:
     if game.rig.is_free():
         game.rig.toggle_free()
@@ -973,7 +957,6 @@ func _set_camera(view: int, yaw_steps: int) -> void:
     await _settle()
 
 
-## Wait for the camera swing to actually finish.
 func _settle() -> void:
     await get_tree().process_frame
     var t0 := Time.get_ticks_msec()
@@ -1031,9 +1014,6 @@ func _log(line: String) -> void:
     f.close()
 
 
-## Poll a condition for up to `timeout` seconds of real time. Checks that are
-## about something *settling* use this, so a slow or starved frame cannot fail
-## them - only the condition never becoming true can.
 func _eventually(cond: Callable, timeout := 2.0) -> bool:
     var t0 := Time.get_ticks_msec()
     while Time.get_ticks_msec() - t0 < timeout * 1000.0:
@@ -1047,11 +1027,6 @@ func _wait(t: float) -> void:
     await get_tree().create_timer(t, true, false, true).timeout
 
 
-## Press and release an action so both kinds of listener see it: polling
-## (Input.is_action_*, used for jump/attack) via action_press, and event
-## handlers (_unhandled_input, where the camera keys live) via push_input,
-## which dispatches synchronously. Input.parse_input_event would queue the
-## event for a later frame and race the checks.
 func _press(action: String) -> void:
     var down := InputEventAction.new()
     down.action = action
@@ -1068,10 +1043,6 @@ func _press(action: String) -> void:
     await get_tree().process_frame
 
 
-## A real key, held down, rather than an action pressed by name. This goes
-## through Input.parse_input_event rather than the viewport, because only that
-## path updates the POLLED action state that Input.get_axis reads - pushing a
-## key event at the viewport reaches _input() and nothing else.
 func _hold_key(key: Key, t: float) -> void:
     var down := InputEventKey.new()
     down.physical_keycode = key
@@ -1087,7 +1058,6 @@ func _hold_key(key: Key, t: float) -> void:
     await get_tree().process_frame
 
 
-## A middle-button drag of the given size, in one go.
 func _middle_drag(by: Vector2) -> void:
     var ev := InputEventMouseMotion.new()
     ev.button_mask = MOUSE_BUTTON_MASK_MIDDLE
@@ -1113,8 +1083,6 @@ func _shot(name: String) -> void:
     while not drawn[0] and Time.get_ticks_msec() - t0 < 1500:
         await get_tree().process_frame
     if not drawn[0]:
-        # never leave the callback armed: if it fires after this node is freed
-        # (e.g. during shutdown) it calls into a dead script instance and crashes
         if RenderingServer.frame_post_draw.is_connected(on_draw):
             RenderingServer.frame_post_draw.disconnect(on_draw)
         _log("    (screenshot %s skipped: window is not being drawn)" % name)

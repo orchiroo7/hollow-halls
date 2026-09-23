@@ -1,21 +1,13 @@
 extends CharacterBody2D
-## One body, two control schemes.
-##
-## TOPDOWN: 8-directional walking around the wide rooms. No combat.
-## SIDE:    Hollow-Knight-ish platforming in the hallways - tight jump with
-##          cut + coyote + buffer, a dash, a directional nail slash with
-##          recoil / pogo, i-frames, and soul-powered healing.
 
 const LAYER_WORLD := 1
 const LAYER_PLAYER := 2
 const LAYER_ENEMY := 4
 
-# --- top-down tuning
 const TD_SPEED := 300.0
 const TD_ACCEL := 3000.0
 const TD_FRICTION := 3600.0
 
-# --- side-view tuning
 const RUN_SPEED := 340.0
 const GROUND_ACCEL := 4200.0
 const AIR_ACCEL := 3000.0
@@ -105,7 +97,6 @@ func _ready() -> void:
     _edge = Boxes.make_box(Vector2(34, 50), Look.INK)
     _edge.show_behind_parent = true
     _body_art.add_child(_edge)
-    # a crest, so the silhouette is yours and nothing else's
     _crest = Boxes.make_box(Vector2(16, 8), Look.CYAN)
     add_child(_crest)
     _eye = Boxes.make_box(Vector2(8, 8), Look.INK)
@@ -150,14 +141,13 @@ func _physics_process(delta: float) -> void:
     if dead:
         return
     if game != null and game.transitioning:
-        return  # frozen mid-shift, but keep velocity so momentum carries through
+        return
 
     invuln = max(0.0, invuln - delta)
     hurt_lock = max(0.0, hurt_lock - delta)
     attack_cd = max(0.0, attack_cd - delta)
     dash_cd = max(0.0, dash_cd - delta)
 
-    # backstop: anything that ends up below the area counts as a pit
     if game != null and global_position.y > game.area_size.y + 200.0:
         hazard_hit()
         return
@@ -169,8 +159,6 @@ func _physics_process(delta: float) -> void:
 
     _update_visuals(delta)
 
-
-# ------------------------------------------------------------------ top-down
 
 func _topdown_process(delta: float) -> void:
     var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
@@ -185,8 +173,6 @@ func _topdown_process(delta: float) -> void:
     move_and_slide()
 
 
-# ----------------------------------------------------------------- side-view
-
 func _side_process(delta: float) -> void:
     var on_floor := is_on_floor()
     coyote = COYOTE_TIME if on_floor else max(0.0, coyote - delta)
@@ -199,7 +185,6 @@ func _side_process(delta: float) -> void:
     if hurt_lock > 0.0:
         move = 0.0
 
-    # --- focus / heal (stand still, hold the key)
     var focusing := Input.is_action_pressed("focus") and on_floor and hurt_lock <= 0.0 \
         and absf(move) < 0.1 and soul >= FOCUS_COST and health < MAX_HEALTH and dash_time <= 0.0
     if focusing:
@@ -220,7 +205,6 @@ func _side_process(delta: float) -> void:
         focus_time = 0.0
         _focus_ring.visible = false
 
-    # --- dash
     if Input.is_action_just_pressed("dash") and dash_cd <= 0.0 and hurt_lock <= 0.0:
         dash_time = DASH_TIME
         dash_cd = DASH_COOLDOWN
@@ -240,11 +224,9 @@ func _side_process(delta: float) -> void:
         _tick_attack(delta)
         return
 
-    # --- attack
     if Input.is_action_just_pressed("attack") and attack_cd <= 0.0:
         _start_attack()
 
-    # --- horizontal
     if absf(move) > 0.1:
         facing = int(signf(move))
         var accel := GROUND_ACCEL if on_floor else AIR_ACCEL
@@ -252,7 +234,6 @@ func _side_process(delta: float) -> void:
     else:
         velocity.x = move_toward(velocity.x, 0.0, FRICTION * delta)
 
-    # --- jump
     if buffer > 0.0 and coyote > 0.0:
         velocity.y = JUMP_VELOCITY
         buffer = 0.0
@@ -347,8 +328,6 @@ func _show_slash() -> void:
     tw.parallel().tween_property(_slash, "modulate:a", 0.0, ATTACK_ACTIVE)
 
 
-# --------------------------------------------------------------------- state
-
 func take_damage(amount: int, from_pos: Vector2) -> void:
     if dead or invuln > 0.0 or (game != null and game.transitioning):
         return
@@ -376,8 +355,6 @@ func take_damage(amount: int, from_pos: Vector2) -> void:
 func hazard_hit() -> void:
     if dead or (game != null and game.transitioning):
         return
-    # i-frames skip the damage, never the rescue: the pits have no floor, so
-    # returning early here used to let you fall forever
     if invuln <= 0.0:
         health -= 1
         invuln = IFRAME_TIME
@@ -427,7 +404,6 @@ func _update_visuals(delta: float) -> void:
     else:
         _blink = 0.0
         _body_art.color = Look.BONE
-    # squash/stretch while airborne
     if mode == Mode.SIDE:
         var s := clampf(velocity.y / 900.0, -0.35, 0.35)
         _body_art.scale = Vector2(1.0 - absf(s) * 0.4, 1.0 + s * 0.35) if not is_on_floor() else Vector2.ONE

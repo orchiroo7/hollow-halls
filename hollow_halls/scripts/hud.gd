@@ -1,6 +1,4 @@
 extends CanvasLayer
-## Masks, soul, area name, the view badge and the death prompt.
-## Built in code against the fixed 1280x720 design resolution.
 
 const Look := preload("res://scripts/look.gd")
 
@@ -65,8 +63,6 @@ func _ready() -> void:
     _death_label.visible = false
 
 
-# --------------------------------------------------------------------- pieces
-
 func _panel(pos: Vector2, size: Vector2, color: Color, radius: int, border := Color(0, 0, 0, 0)) -> Panel:
     var p := Panel.new()
     p.position = pos
@@ -95,8 +91,6 @@ func _label(text: String, pos: Vector2, font_size: int, color: Color) -> Label:
     _root.add_child(l)
     return l
 
-
-# ----------------------------------------------------------------------- feed
 
 func set_health(cur: int, total: int) -> void:
     for i in _masks.size():

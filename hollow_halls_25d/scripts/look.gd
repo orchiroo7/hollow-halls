@@ -1,15 +1,8 @@
 extends RefCounted
-## The look of the game in one place: palette, the tile texture every surface
-## shares, the outline material that gives a flat box a drawn edge, and the
-## vignette.
-##
-## The rule everything here follows: it has to survive the flat view. No
-## shading, no shadows - so shape, value and edges do all the work.
 
-# ------------------------------------------------------------------- palette
-const INK := Color(0.04, 0.035, 0.07)        # outlines, the darkest value
-const VOID := Color(0.055, 0.05, 0.09)       # sky, straight up and straight down
-const HORIZON := Color(0.13, 0.11, 0.2)      # sky, level with you
+const INK := Color(0.04, 0.035, 0.07)
+const VOID := Color(0.055, 0.05, 0.09)
+const HORIZON := Color(0.13, 0.11, 0.2)
 
 const FLOOR_ROOM := Color(0.165, 0.17, 0.26)
 const WALL_ROOM := Color(0.33, 0.33, 0.48)
@@ -19,11 +12,11 @@ const PLATFORM := Color(0.56, 0.55, 0.76)
 const CRATE := Color(0.3, 0.3, 0.45)
 const PIT := Color(0.05, 0.045, 0.08)
 
-const GOLD := Color(0.93, 0.72, 0.31)        # doors, signposts, soul you can spend
-const CYAN := Color(0.55, 0.88, 1.0)         # you, and the focus you cast
+const GOLD := Color(0.93, 0.72, 0.31)
+const CYAN := Color(0.55, 0.88, 1.0)
 const BONE := Color(0.93, 0.95, 1.0)         # masks, the player's body
-const BLOOD := Color(0.87, 0.31, 0.42)       # spikes and walkers
-const EMBER := Color(0.95, 0.58, 0.25)       # flyers
+const BLOOD := Color(0.87, 0.31, 0.42)
+const EMBER := Color(0.95, 0.58, 0.25)
 
 const OUTLINE_THIN := 0.012
 const OUTLINE_THICK := 0.03
@@ -31,8 +24,6 @@ const OUTLINE_THICK := 0.03
 static var _grid: Texture2D = null
 
 
-## A tile sheet: a dark seam around the edge and a fainter cross through the
-## middle. It multiplies the surface colour, so one texture suits every box.
 static func grid_texture() -> Texture2D:
     if _grid != null:
         return _grid
@@ -54,8 +45,6 @@ static func grid_texture() -> Texture2D:
     return _grid
 
 
-## Tiles a surface at one square per two metres, in world space, so the grid
-## runs straight across everything it is laid on.
 static func tile(mat: StandardMaterial3D, scale := 0.5) -> void:
     mat.albedo_texture = grid_texture()
     mat.uv1_triplanar = true
@@ -64,8 +53,6 @@ static func tile(mat: StandardMaterial3D, scale := 0.5) -> void:
     mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 
 
-## A drawn edge, as a second pass: the same mesh grown a little, inside out, in
-## the darkest colour. Costs no extra node, and vanishes with the mesh it is on.
 static func outline(mat: StandardMaterial3D, width := OUTLINE_THIN) -> StandardMaterial3D:
     var o := StandardMaterial3D.new()
     o.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -88,7 +75,6 @@ void fragment() {
 """
 
 
-## A soft dark frame over everything. Sells the flat picture as a picture.
 static func vignette() -> CanvasLayer:
     var layer := CanvasLayer.new()
     layer.layer = 15

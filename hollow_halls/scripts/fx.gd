@@ -1,6 +1,4 @@
 extends RefCounted
-## Motes in the air, a puff when you land, sparks off a hit, and the ghosts a
-## dash leaves behind. Nothing here touches gameplay.
 
 const Boxes := preload("res://scripts/boxes.gd")
 
@@ -21,7 +19,6 @@ static func _mat(color: Color, spread: float, speed: float, gravity: float) -> P
     return m
 
 
-## Slow motes drifting through the area. Placed once, left alone.
 static func dust(area: Vector2) -> GPUParticles2D:
     var p := GPUParticles2D.new()
     p.amount = 70
@@ -46,7 +43,6 @@ static func _dot(size: int) -> Texture2D:
     return ImageTexture.create_from_image(img)
 
 
-## A one-shot burst, freed once it has played out.
 static func burst(parent: Node2D, at: Vector2, color: Color, count: int, speed: float, size: int, up: bool) -> void:
     if parent == null or not parent.is_inside_tree():
         return
@@ -73,7 +69,6 @@ static func burst(parent: Node2D, at: Vector2, color: Color, count: int, speed: 
     )
 
 
-## The trail behind a dash: a still copy of the body, fading where it stood.
 static func ghost(parent: Node2D, at: Vector2, size: Vector2, color: Color) -> void:
     if parent == null or not parent.is_inside_tree():
         return

@@ -1,7 +1,4 @@
 extends RefCounted
-## Small, short-lived things: dust in the air, a puff when you land, the ghosts
-## you leave behind a dash, sparks off a hit. None of it is lit, so all of it
-## survives the flat view.
 
 const Look := preload("res://scripts/look.gd")
 
@@ -23,8 +20,6 @@ static func _quad(size: float, color: Color) -> QuadMesh:
     return q
 
 
-## Motes drifting in the air around wherever it is placed. Give it a node to
-## follow and it keeps up. Nothing but atmosphere - it never touches anything.
 static func dust(extents: Vector3) -> GPUParticles3D:
     var p := GPUParticles3D.new()
     p.amount = 90
@@ -48,7 +43,6 @@ static func dust(extents: Vector3) -> GPUParticles3D:
     return p
 
 
-## A one-shot burst, freed once it has played out.
 static func burst(parent: Node3D, at: Vector3, color: Color, count: int, speed: float, size: float, up: float) -> void:
     if parent == null or not parent.is_inside_tree():
         return
@@ -84,8 +78,6 @@ static func burst(parent: Node3D, at: Vector3, color: Color, count: int, speed: 
     )
 
 
-## The trail behind a dash: a still copy of the body left where you were,
-## fading where it stands.
 static func ghost(parent: Node3D, at: Vector3, size: Vector3, facing: float, color: Color) -> void:
     if parent == null or not parent.is_inside_tree():
         return

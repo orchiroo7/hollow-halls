@@ -4,11 +4,11 @@ Two prototypes built in Godot 4, from scratch, in GDScript. No assets, no
 plugins — every box, collider and camera move is made in code.
 
 **[▶ Play Hollow Halls 2.5D in your browser](https://orchiroo7.github.io/hollow-halls/)**
-— works on a desktop with a keyboard, or on a phone held sideways.
+— works on a desktop with a keyboard, or on a phone held sideways. In Japanese; press `8` for English.
 
 | | |
 |---|---|
-| [`hollow_halls_25d/`](hollow_halls_25d) | A 3D world that looks 2D. Two flat views, a free orbit, and a camera that reveals the trick as it moves between them. **159 automated checks.** |
+| [`hollow_halls_25d/`](hollow_halls_25d) | A 3D world that looks 2D. Two flat views, a free orbit, and a camera that reveals the trick as it moves between them. **171 automated checks.** |
 | [`hollow_halls/`](hollow_halls) | The 2D original: top-down rooms, side-on combat corridors, seamless transitions with no fade to black. **78 automated checks.** |
 | [`docs/`](docs) | The web build of the 2.5D game, which is what the link above serves. |
 

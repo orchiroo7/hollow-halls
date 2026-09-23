@@ -1,12 +1,7 @@
 extends CanvasLayer
-## Masks, soul, where you are, which view you are in, and control hints.
-##
-## The stretch mode is "expand", so the window's aspect decides how much of the
-## world you see and the design size is only a starting point. Nothing here is
-## positioned against that size: the HUD hangs off four anchored corners, so it
-## stays put whatever shape the window is - a phone browser included.
 
 const Look := preload("res://scripts/look.gd")
+const Lang := preload("res://scripts/lang.gd")
 
 const LEFT_W := 300.0
 const RIGHT_W := 520.0
@@ -27,6 +22,9 @@ var _tl: Control
 var _tr: Control
 var _bar: Panel
 var _last_cam := ""
+var _soul_label: Label
+var _area_key := ""
+var _area_kind := ""
 
 
 func _ready() -> void:
@@ -47,16 +45,14 @@ func _ready() -> void:
     middle.mouse_filter = Control.MOUSE_FILTER_IGNORE
     _root.add_child(middle)
 
-    # --- top left: masks and soul
     _panel(tl, Vector2(20, 20), Vector2(266, 74), Color(0.05, 0.05, 0.09, 0.55), 10, Color(1, 1, 1, 0.07))
     for i in 5:
         _panel(tl, Vector2(34 + i * 32, 34), Vector2(24, 24), Color(0.12, 0.12, 0.18, 0.9), 6, Color(1, 1, 1, 0.1))
         _masks.append(_panel(tl, Vector2(37 + i * 32, 37), Vector2(18, 18), Look.BONE, 4))
-    _label(tl, "SOUL", Vector2(34, 66), 12, Color(0.55, 0.72, 0.88, 0.9))
+    _soul_label = _label(tl, Lang.t("soul"), Vector2(34, 66), 12, Color(0.55, 0.72, 0.88, 0.9))
     _panel(tl, Vector2(82, 69), Vector2(186, 10), Color(0.1, 0.12, 0.18, 0.95), 5, Color(1, 1, 1, 0.08))
     _soul_fill = _panel(tl, Vector2(84, 71), Vector2(182, 6), Look.CYAN, 3)
 
-    # --- top right: where you are, and which view
     _area_label = _label(tr, "", Vector2(0, 26), 24, Color(1, 1, 1, 0.92))
     _area_label.size = Vector2(RIGHT_W - EDGE, 32)
     _area_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -71,16 +67,13 @@ func _ready() -> void:
     _cam_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     _cam_label.pivot_offset = Vector2(_cam_label.size.x, 11)
 
-    # --- bottom: the control hints, on a bar as wide as the window is
     var bar := _panel(bottom, Vector2.ZERO, Vector2(0, BAR_H), Color(0.04, 0.035, 0.07, 0.5), 0)
-    bar.set_anchors_preset(Control.PRESET_FULL_RECT)
+    _fill(bar, 0.0)
     _bar = bar
     _hint_label = _label(bottom, "", Vector2(0, 12), 13, Color(1, 1, 1, 0.5))
-    _hint_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-    _hint_label.offset_top = 12
+    _fill(_hint_label, 12.0)
     _hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
-    # --- middle: death
     _death_tint = ColorRect.new()
     _death_tint.color = Color(0.3, 0.02, 0.06, 0.35)
     _death_tint.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -88,7 +81,7 @@ func _ready() -> void:
     _death_tint.visible = false
     middle.add_child(_death_tint)
 
-    _death_label = _label(middle, "YOU DIED", Vector2.ZERO, 52, Color(1, 0.42, 0.48))
+    _death_label = _label(middle, Lang.t("you_died"), Vector2.ZERO, 52, Color(1, 0.42, 0.48))
     _death_label.set_anchors_preset(Control.PRESET_CENTER)
     _death_label.size = Vector2(600, 90)
     _death_label.pivot_offset = Vector2(300, 45)
@@ -97,9 +90,6 @@ func _ready() -> void:
     _death_label.visible = false
 
 
-# --------------------------------------------------------------------- pieces
-
-## A corner of the screen: the anchors first, then how far its edges sit in.
 func _corner(al: float, at: float, ar: float, ab: float, tl: Vector2, br: Vector2) -> Control:
     var c := Control.new()
     c.anchor_left = al
@@ -113,6 +103,17 @@ func _corner(al: float, at: float, ar: float, ab: float, tl: Vector2, br: Vector
     c.mouse_filter = Control.MOUSE_FILTER_IGNORE
     _root.add_child(c)
     return c
+
+
+func _fill(c: Control, top: float) -> void:
+    c.anchor_left = 0.0
+    c.anchor_top = 0.0
+    c.anchor_right = 1.0
+    c.anchor_bottom = 1.0
+    c.offset_left = 0.0
+    c.offset_right = 0.0
+    c.offset_top = top
+    c.offset_bottom = 0.0
 
 
 func _panel(parent: Control, pos: Vector2, size: Vector2, color: Color, radius: int, border := Color(0, 0, 0, 0)) -> Panel:
@@ -144,8 +145,6 @@ func _label(parent: Control, text: String, pos: Vector2, font_size: int, color: 
     return l
 
 
-# ----------------------------------------------------------------------- feed
-
 func set_health(cur: int, total: int) -> void:
     for i in _masks.size():
         var filled := i < cur
@@ -158,10 +157,12 @@ func set_soul(value: int, total: int) -> void:
     _soul_fill.size.x = 182.0 * clampf(float(value) / float(total), 0.0, 1.0)
 
 
-func set_area(area_name: String, kind: String) -> void:
-    _area_label.text = area_name
+func set_area(key: String, kind: String) -> void:
+    _area_key = key
+    _area_kind = kind
+    _area_label.text = Lang.t(key)
     var room := kind == "room"
-    _chip_label.text = "SAFE" if room else "ENEMIES"
+    _chip_label.text = Lang.t("safe") if room else Lang.t("enemies")
     var tint := Color(0.42, 0.85, 0.6) if room else Color(0.95, 0.4, 0.45)
     _chip_label.add_theme_color_override("font_color", tint)
     var sb: StyleBoxFlat = _chip.get_theme_stylebox("panel")
@@ -169,25 +170,34 @@ func set_area(area_name: String, kind: String) -> void:
     sb.border_color = Color(tint.r, tint.g, tint.b, 0.5)
 
 
-func set_camera(view_name: String, side: bool, free := false) -> void:
-    if view_name == _last_cam:
+func relabel() -> void:
+    _soul_label.text = Lang.t("soul")
+    _death_label.text = Lang.t("you_died")
+    if _area_key != "":
+        set_area(_area_key, _area_kind)
+    var showing := _last_cam
+    _last_cam = ""
+    if showing != "":
+        set_camera(showing, showing == "side_view", showing == "free_orbit")
+
+
+func set_camera(view_key: String, side: bool, free := false) -> void:
+    if view_key == _last_cam:
         return
-    _last_cam = view_name
-    _cam_label.text = view_name
+    _last_cam = view_key
+    _cam_label.text = Lang.t(view_key)
     _cam_label.scale = Vector2(1.15, 1.15)
     var tw := create_tween()
     tw.set_ignore_time_scale(true)
     tw.tween_property(_cam_label, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK)
     if free:
-        _hint_label.text = "WASD move (relative to the camera)     SPACE jump     K attack     SHIFT dash\nQ / E orbit     + / - zoom     middle-drag grabs the camera, wheel zooms     1 / 2 / TAB back to a flat view"
+        _hint_label.text = Lang.t("hint_free")
     elif side:
-        _hint_label.text = "A/D move     SPACE jump     K attack  (hold W / S to aim, S midair = pogo)     SHIFT dash     F focus-heal\nTAB top view          Q / E turn the view          3 free orbit          R respawn"
+        _hint_label.text = Lang.t("hint_side")
     else:
-        _hint_label.text = "WASD move     SPACE jump     K attack     SHIFT dash     F focus-heal\nTAB side view          Q / E turn the view          3 free orbit          R respawn"
+        _hint_label.text = Lang.t("hint_top")
 
 
-## On a phone the keyboard hints are a lie and everything is half the size it
-## needs to be, so the hints go and the two corners grow.
 func set_compact(on: bool) -> void:
     _bar.visible = not on
     _hint_label.visible = not on

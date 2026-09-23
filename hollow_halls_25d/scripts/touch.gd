@@ -1,38 +1,26 @@
 extends CanvasLayer
-## On-screen controls, for playing and demoing this on a phone.
-##
-## It drives the same input actions the keys do - a stick that presses the move
-## actions with a strength, buttons that press the rest - so nothing else in the
-## game knows or cares that a finger is involved. The one exception is the free
-## orbit, where dragging anywhere empty swings the camera, because a stick
-## cannot say "look over there" half as well as a drag can.
-##
-## Everything is sized from the visible rect rather than in fixed units, so a
-## button is a thumb's width on a phone and still a button on a tablet.
 
 const Look := preload("res://scripts/look.gd")
+const Lang := preload("res://scripts/lang.gd")
 
-## The round buttons on the right, in slot order: the first slot is the one
-## under the resting thumb and is drawn biggest.
 const BUTTONS := [
-    {"action": "jump", "label": "JUMP"},
-    {"action": "attack", "label": "ATTACK"},
-    {"action": "dash", "label": "DASH"},
+    {"action": "jump", "key": "btn_jump"},
+    {"action": "attack", "key": "btn_attack"},
+    {"action": "dash", "key": "btn_dash"},
 ]
 
-## The camera bar across the top.
 const CAMERA_BAR := [
-    {"action": "cam_left", "label": "<", "hold": true},
-    {"action": "cam_top", "label": "TOP", "hold": false},
-    {"action": "cam_side", "label": "SIDE", "hold": false},
-    {"action": "cam_free", "label": "ORBIT", "hold": false},
-    {"action": "cam_right", "label": ">", "hold": true},
+    {"action": "cam_left", "key": "<", "hold": true},
+    {"action": "cam_top", "key": "btn_top", "hold": false},
+    {"action": "cam_side", "key": "btn_side", "hold": false},
+    {"action": "cam_free", "key": "btn_orbit", "hold": false},
+    {"action": "cam_right", "key": ">", "hold": true},
 ]
 
 const DEAD_ZONE := 0.16
-const STICK_GRAB := 1.35   # you may grab the stick a little outside its ring
-const STICK_NUDGE := 0.035 # in from the corner, as a fraction of the short side
-const LOOK_ACROSS := PI    # a drag right across the screen turns you half a turn
+const STICK_GRAB := 1.35
+const STICK_NUDGE := 0.035
+const LOOK_ACROSS := PI
 
 var rig = null
 
@@ -40,14 +28,14 @@ var _root: Control
 var _portrait: Control
 var _stick_base: Panel
 var _stick_knob: Panel
-var _hits: Array = []          # {node, centre, radius, action, hold}
+var _hits: Array = []
 var _stick_home := Vector2.ZERO
 var _stick_radius := 90.0
 var _owners: Dictionary = {}   # touch index -> "stick" | "orbit" | an action name
 var _points: Dictionary = {}   # the camera's fingers
-var _pinch := 0.0              # last gap between two of them
-var _mid := Vector2.ZERO       # and the point between them
-var _held: Dictionary = {}     # action -> how many fingers are on it
+var _pinch := 0.0
+var _mid := Vector2.ZERO
+var _held: Dictionary = {}
 
 
 static func wanted() -> bool:
@@ -68,9 +56,9 @@ func _ready() -> void:
 
     for i in BUTTONS.size():
         var b: Dictionary = BUTTONS[i]
-        _hits.append({"node": _pill(b["label"], true), "action": b["action"], "hold": true, "big": i == 0})
+        _hits.append({"node": _pill(b["key"], true), "action": b["action"], "hold": true, "big": i == 0})
     for c in CAMERA_BAR:
-        _hits.append({"node": _pill(c["label"], false), "action": c["action"], "hold": c["hold"], "bar": true})
+        _hits.append({"node": _pill(c["key"], false), "action": c["action"], "hold": c["hold"], "bar": true})
 
     _portrait = Control.new()
     _portrait.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -98,8 +86,6 @@ func _ready() -> void:
 var _turn_label: Label
 
 
-# ------------------------------------------------------------------- building
-
 func _circle(fill: Color, border: Color) -> Panel:
     var p := Panel.new()
     p.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -112,11 +98,20 @@ func _circle(fill: Color, border: Color) -> Panel:
     return p
 
 
-func _pill(text: String, round_shape: bool) -> Panel:
+func relabel() -> void:
+    for h in _hits:
+        var node: Panel = h["node"]
+        if node.has_meta("label") and node.has_meta("key"):
+            node.get_meta("label").text = Lang.t(node.get_meta("key"))
+    _layout()
+
+
+func _pill(key: String, round_shape: bool) -> Panel:
     var p := _circle(Color(0.08, 0.075, 0.13, 0.55), Color(1, 1, 1, 0.22))
     p.set_meta("round", round_shape)
+    p.set_meta("key", key)
     var l := Label.new()
-    l.text = text
+    l.text = Lang.t(key)
     l.set_anchors_preset(Control.PRESET_FULL_RECT)
     l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -129,7 +124,6 @@ func _pill(text: String, round_shape: bool) -> Panel:
     return p
 
 
-## Everything is placed from the visible rect, so it survives a rotation.
 func _layout() -> void:
     var rect: Vector2 = get_viewport().get_visible_rect().size
     var u: float = minf(rect.x, rect.y)
@@ -146,14 +140,12 @@ func _layout() -> void:
     var m: float = u * 0.05
     var r: float = u * 0.085
 
-    # fixed, not springing to the finger: you learn where it is and stop looking
     _stick_radius = u * 0.13
     var nudge: float = u * STICK_NUDGE
     _stick_home = Vector2(m + _stick_radius + nudge, rect.y - m - _stick_radius - nudge)
     _place(_stick_base, _stick_home, _stick_radius, true)
     _place(_stick_knob, _stick_home, _stick_radius * 0.42, true)
 
-    # the right-hand cluster: attack biggest and lowest, under the thumb
     var spots := [
         Vector2(rect.x - m - r * 1.15, rect.y - m - r * 1.15),
         Vector2(rect.x - m - r * 3.4, rect.y - m - r * 1.5),
@@ -170,8 +162,6 @@ func _layout() -> void:
         _fit(h["node"], Vector2(rad * 2.0, rad * 2.0))
         i += 1
 
-    # the camera bar, centred along the bottom between the stick and the
-    # buttons - the top belongs to the HUD, and thumbs do not wander there
     var bw: float = u * 0.155
     var bh: float = u * 0.085
     var gap: float = u * 0.014
@@ -203,8 +193,6 @@ func _radius(p: Panel, r: int) -> void:
     sb.set_corner_radius_all(r)
 
 
-## Size the caption to the box it sits in and to how long the word is, so
-## ATTACK and > both end up inside their buttons.
 func _fit(p: Panel, box: Vector2) -> void:
     if not p.has_meta("label"):
         return
@@ -213,8 +201,6 @@ func _fit(p: Panel, box: Vector2) -> void:
     l.add_theme_font_size_override("font_size", maxi(int(minf(by_width, box.y * 0.45)), 8))
 
 
-## Where a given button sits, in viewport coordinates. For the tests, and for
-## anything else that needs to point at one.
 func hit_centre(action: String) -> Vector2:
     for h in _hits:
         if h["action"] == action and h.has("centre"):
@@ -230,9 +216,7 @@ func stick_radius() -> float:
     return _stick_radius
 
 
-# --------------------------------------------------------------------- input
-
-const MOUSE := -1  # the mouse counts as one more finger, so these are testable
+const MOUSE := -1
 
 func _input(event: InputEvent) -> void:
     if _portrait.visible:
@@ -268,13 +252,10 @@ func _down(index: int, pos: Vector2) -> void:
         _owners[index] = "stick"
         _drag_stick(pos)
     else:
-        # empty screen belongs to the camera, but only in the orbit: the flat
-        # views are turned in quarters with the arrows, and a stray drag must
-        # never knock them off square
         _owners[index] = "orbit"
         _points[index] = pos
         if rig != null:
-            rig.grabbing = true   # hold the walking directions still meanwhile
+            rig.grabbing = true
         if _points.size() >= 2:
             _restart_pinch()
 
@@ -295,9 +276,6 @@ func _drag(index: int, pos: Vector2, relative: Vector2) -> void:
             pass
 
 
-## A drag is measured in viewport units, which are not screen pixels - the
-## stretch mode sees to that - so the look speed is set against the width of
-## the screen rather than left to whatever the scale happens to be.
 func _look_gain() -> float:
     var wide: float = maxf(get_viewport().get_visible_rect().size.x, 1.0)
     return LOOK_ACROSS / (wide * rig.MOUSE_ORBIT)
@@ -314,8 +292,6 @@ func _restart_pinch() -> void:
     _mid = (a + b) * 0.5
 
 
-## Two fingers, doing both at once the way a map does: the gap between them
-## zooms, and where they are between them swings the orbit.
 func _two_finger() -> void:
     var keys: Array = _points.keys()
     var a: Vector2 = _points[keys[0]]
@@ -389,8 +365,6 @@ func _release_moves() -> void:
         Input.action_release(a)
 
 
-## The camera keys are read as events in _unhandled_input, the rest are polled,
-## so a press has to be both: a real action event and a held action state.
 func _press(action: String, hold: bool) -> void:
     _held[action] = int(_held.get(action, 0)) + 1
     Input.action_press(action)
@@ -413,7 +387,6 @@ func _release(action: String) -> void:
     get_viewport().push_input(ev)
 
 
-## A tap-style button lets go by itself, so holding TOP does not fire it twice.
 func _release_soon(action: String) -> void:
     await get_tree().process_frame
     await get_tree().process_frame
@@ -426,8 +399,6 @@ func _lit(node: Panel, on: bool) -> void:
     sb.bg_color = Color(Look.CYAN.r, Look.CYAN.g, Look.CYAN.b, 0.32) if on else Color(0.08, 0.075, 0.13, 0.55)
 
 
-## Which view you are in, shown on the bar. Without this the ORBIT button is a
-## toggle with nothing to say whether it is on, which reads as it not working.
 func _process(_delta: float) -> void:
     if rig == null or _portrait.visible:
         return
@@ -438,7 +409,7 @@ func _process(_delta: float) -> void:
         var node: Panel = h["node"]
         var sb: StyleBoxFlat = node.get_theme_stylebox("panel")
         if int(_held.get(h["action"], 0)) > 0:
-            continue  # a finger is on it; leave the press colour alone
+            continue
         var on: bool = h["action"] == current
         sb.bg_color = Color(Look.GOLD.r, Look.GOLD.g, Look.GOLD.b, 0.22) if on else Color(0.08, 0.075, 0.13, 0.55)
         sb.border_color = Color(Look.GOLD.r, Look.GOLD.g, Look.GOLD.b, 0.7) if on else Color(1, 1, 1, 0.22)

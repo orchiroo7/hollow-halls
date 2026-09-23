@@ -1,7 +1,4 @@
 extends CharacterBody2D
-## Hallway-only enemies. Two flavours, both box-shaped:
-##   walker - patrols a ledge, lunges when the player gets close
-##   flyer  - bobs in place until it spots you, then homes in
 
 const LAYER_WORLD := 1
 const LAYER_ENEMY := 4

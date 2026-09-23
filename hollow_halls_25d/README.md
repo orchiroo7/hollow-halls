@@ -23,6 +23,7 @@ godot --path .
 | `Tab` | switch between top view and side view |
 | `1` / `2` | top view / side view |
 | `3` | free orbit, and back again |
+| `8` | switch between Japanese and English |
 | `Q` / `E` | turn the view 90° left / right (in the orbit, hold to swing round) |
 | `+` / `-` | orbit only: pull in and push out |
 | middle-drag | orbit only: grabs the camera and moves it, as in a 3D package |
@@ -110,6 +111,23 @@ because a 16:9 game in a portrait strip shows almost nothing.
 Nothing appears on a desktop: the layer is only built when
 `DisplayServer.is_touchscreen_available()` says so, or you pass `--touch`.
 
+## Language
+
+Everything on screen is Japanese by default - the HUD, the area names, the
+signposts in the world, the on-screen buttons. `8` switches the lot to English
+and back, live, with no reload.
+
+The strings live in `scripts/lang.gd`, one key per phrase with both languages
+beside each other, and a test asserts no phrase is missing either. Area names
+are keyed by region id, so the HUD, the signposts and the level data never
+disagree about what a place is called.
+
+Godot's stock font has no Japanese glyphs, so `fonts/NotoSansJP-Subset.ttf` is
+bundled and set as the project's default font. It is Noto Sans JP, weight 500,
+subset to the 188 code points this game actually uses: 9.6 MB down to 46 KB,
+which matters because the same file ships in the web build. Licence in
+`fonts/OFL.txt`.
+
 ## The level
 
 The same shape as Hollow Halls — two rooms with exactly two openings each,
@@ -169,7 +187,7 @@ the flag:
 godot --path . --resolution 1280x720 ++ --autopilot --shots C:/some/dir
 ```
 
-It drives the real inputs and asserts 159 things, among them: attack is on K, the two flat
+It drives the real inputs and asserts 171 things, among them: attack is on K, the two flat
 views plus the orbit, at rest both are flat (1° lens, no sun) with the side view dead
 level, a switch opens into perspective (42°) with the sun up mid-swing and
 passes through the angles in between (sampled every frame), gameplay is paused

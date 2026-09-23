@@ -1,25 +1,19 @@
 extends AnimatableBody3D
-## An automatic sliding door across a hallway entrance. It opens when the
-## player comes near and slides sideways into the wall it sits in; once they
-## have walked well clear it slides shut again. Closed, it is solid.
-##
-## Seen from above it slides along the wall. Side on it is a gate bar across
-## the corridor that slides out of the slice you are looking at.
 
 const Meshes := preload("res://scripts/meshes.gd")
 const Look := preload("res://scripts/look.gd")
 
-const OPEN_RADIUS := 5.0    # start opening when the player is this close (clears even a dash)
-const CLOSE_RADIUS := 6.0   # only close once they are this far (never on them)
+const OPEN_RADIUS := 5.0
+const CLOSE_RADIUS := 6.0
 const TRAVEL_TIME := 0.3
 const COLOR := Look.GOLD
 
 var closed_center := Vector3.ZERO
 var size := Vector3.ONE
-var slide := Vector3.ZERO    # offset from closed to fully open
+var slide := Vector3.ZERO
 var occluder: Dictionary = {}  # the camera's fade entry; kept in step as it moves
 var material: StandardMaterial3D
-var openness := 0.0          # 0 shut, 1 fully open
+var openness := 0.0
 
 var _want_open := false
 

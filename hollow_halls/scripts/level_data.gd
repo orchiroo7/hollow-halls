@@ -1,12 +1,4 @@
 extends RefCounted
-## All level geometry lives here as plain data. Boxes only, for now.
-##
-## Two wide top-down rooms ("room_a", "room_b") joined by three narrow
-## side-scrolling hallways ("hall_1".."hall_3"). Layout:
-##
-##   room_a --east--> hall_1 --> west-- room_b
-##   room_a --north-> hall_2 --> south- room_b
-##   room_b --east--> hall_3 --> west-- room_a
 
 const WALL := 40.0
 

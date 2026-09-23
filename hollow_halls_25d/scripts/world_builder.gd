@@ -1,12 +1,11 @@
 extends RefCounted
-## Turns level_data.gd into nodes: lit boxes, colliders, spike pits, signposts
-## and enemies.
 
 const LevelData := preload("res://scripts/level_data.gd")
 const EnemyScript := preload("res://scripts/enemy.gd")
 const Meshes := preload("res://scripts/meshes.gd")
 const DoorScript := preload("res://scripts/door.gd")
 const Look := preload("res://scripts/look.gd")
+const Lang := preload("res://scripts/lang.gd")
 
 const LAYER_WORLD := 1
 const LAYER_PLAYER := 2
@@ -24,17 +23,12 @@ const COLORS := {
     "trim": Color(0.42, 0.42, 0.6),
 }
 
-## Terrain reads as terrain because it is tiled; the things you stand on, climb
-## and bump into read as objects because they are outlined.
 const TILED := ["floor_room", "wall_room", "floor_hall", "wall_hall", "pit_floor"]
 const OUTLINED := ["platform", "crate"]
 
-## Kinds the camera is allowed to fade when they get between it and the player.
 const OCCLUDER_KINDS := ["wall_room", "wall_hall", "platform", "crate", "floor_room", "floor_hall", "pit_floor", "door"]
 
 
-## Builds all static geometry under root. Returns the occluders: one entry per
-## box the camera can fade, {mesh, mat, aabb}.
 static func build(root: Node3D) -> Array:
     var occluders: Array = []
     for s in LevelData.solids():
@@ -52,7 +46,7 @@ static func build(root: Node3D) -> Array:
     for d in LevelData.doors():
         occluders.append(add_door(root, d["center"], d["size"], d["slide"]))
     for l in LevelData.labels():
-        add_label(root, l["text"], l["pos"])
+        add_label(root, l["key"], l["pos"])
     return occluders
 
 
@@ -66,8 +60,6 @@ static func spawn_enemies(root: Node3D, game) -> void:
         en.home_rects = LevelData.region_at(e["pos"]).get("rects", [])
         root.add_child(en)
 
-
-# ---------------------------------------------------------------- primitives
 
 static func make_mesh(size: Vector3, color: Color, unshaded := false) -> MeshInstance3D:
     return Meshes.box(size, color, unshaded)
@@ -97,8 +89,6 @@ static func add_box(root: Node3D, aabb: AABB, color: Color, collide: bool, glow 
     return {"mesh": mi, "mat": mat, "aabb": aabb, "base": color}
 
 
-## Returns an occluder entry for the teeth, so the camera can clear a pit away
-## like any other box when it sits in front of a side view.
 static func add_hazard(root: Node3D, aabb: AABB, axis: Vector3) -> Dictionary:
     var area := Area3D.new()
     area.collision_layer = 0
@@ -118,7 +108,7 @@ static func add_hazard(root: Node3D, aabb: AABB, axis: Vector3) -> Dictionary:
 
     var teeth := Node3D.new()
     root.add_child(teeth)
-    var spike_mat := StandardMaterial3D.new()  # one per pit, so pits fade separately
+    var spike_mat := StandardMaterial3D.new()
     spike_mat.albedo_color = Look.BLOOD
     spike_mat.emission_enabled = true
     spike_mat.emission = Color(0.6, 0.1, 0.15)
@@ -155,9 +145,11 @@ static func add_door(root: Node3D, center: Vector3, size: Vector3, slide: Vector
     return info
 
 
-static func add_label(root: Node3D, text: String, pos: Vector3) -> void:
+static func add_label(root: Node3D, key: String, pos: Vector3) -> void:
     var l := Label3D.new()
-    l.text = text
+    l.text = Lang.t(key)
+    l.set_meta("key", key)
+    l.add_to_group("signpost")
     l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
     l.no_depth_test = true
     l.font_size = 56

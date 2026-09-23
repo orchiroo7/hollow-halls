@@ -1,5 +1,4 @@
 extends RefCounted
-## Builds the nodes (boxes) for an area from the plain data in level_data.gd.
 
 const LevelData := preload("res://scripts/level_data.gd")
 const Boxes := preload("res://scripts/boxes.gd")
@@ -19,8 +18,6 @@ static func build(data: Dictionary, world: Node2D, game: Node) -> void:
         _build_side(data, world, game)
 
 
-# ---------------------------------------------------------------- primitives
-
 static func make_box(size: Vector2, color: Color) -> Polygon2D:
     return Boxes.make_box(size, color)
 
@@ -38,7 +35,6 @@ static func add_solid(parent: Node, rect: Rect2, color: Color) -> StaticBody2D:
     var face := Boxes.make_box(rect.size, color, Look.OUTLINE)
     Look.tile(face, rect.position, 96.0)
     body.add_child(face)
-    # top highlight, so a flat box still reads as a surface
     var hi := make_box(Vector2(rect.size.x, min(6.0, rect.size.y * 0.25)), color.lightened(0.25))
     hi.position = Vector2(0, -rect.size.y * 0.5 + min(3.0, rect.size.y * 0.125))
     body.add_child(hi)
@@ -118,8 +114,6 @@ static func add_hazard(parent: Node, rect: Rect2, game: Node) -> Area2D:
     return area
 
 
-# ------------------------------------------------------------------ top-down
-
 static func _build_topdown(data: Dictionary, world: Node2D, game: Node) -> void:
     var size: Vector2 = data["size"]
     var floor_color: Color = data["floor_color"]
@@ -137,7 +131,6 @@ static func _build_topdown(data: Dictionary, world: Node2D, game: Node) -> void:
     world.add_child(tiles)
     _add_inlays(world, size, floor_color)
 
-    # outer walls, split around the door openings
     var gaps := {"north": [], "south": [], "east": [], "west": []}
     for d in data["doors"]:
         gaps[d["side"]].append(Vector2(d["at"] - d["span"] * 0.5, d["at"] + d["span"] * 0.5))
@@ -161,9 +154,6 @@ static func _build_topdown(data: Dictionary, world: Node2D, game: Node) -> void:
         add_label(world, "HALLWAY", lp - Vector2(46, 12), Color(Look.GOLD.r, Look.GOLD.g, Look.GOLD.b, 0.9), 18)
 
 
-
-## A medallion in the middle of the room and a border round it, so a wide
-## empty floor has something to be the centre of.
 static func _add_inlays(world: Node2D, size: Vector2, floor_color: Color) -> void:
     var c := size * 0.5
     var ring := Rect2(c - Vector2(260, 180), Vector2(520, 360))
@@ -206,8 +196,6 @@ static func _segments(length: float, gaps: Array) -> Array:
     return segs
 
 
-# ----------------------------------------------------------------- side-view
-
 static func _build_side(data: Dictionary, world: Node2D, game: Node) -> void:
     var size: Vector2 = data["size"]
     var sky: Color = data["bg_color"]
@@ -216,7 +204,6 @@ static func _build_side(data: Dictionary, world: Node2D, game: Node) -> void:
     bg.z_index = -20
     world.add_child(bg)
 
-    # two bands of far-off masonry, the nearer one lighter: depth with no camera
     var rng := RandomNumberGenerator.new()
     rng.seed = hash(data["id"])
     for band in 2:
@@ -225,8 +212,6 @@ static func _build_side(data: Dictionary, world: Node2D, game: Node) -> void:
             var w := rng.randf_range(140, 420)
             var h := rng.randf_range(160, 520)
             var r := Rect2(rng.randf_range(-100, size.x - w + 100), rng.randf_range(0, size.y - h), w, h)
-            # towards a cold stone colour rather than towards white, so the
-            # background never competes with the things you can touch
             var slab := add_decor(world, r, sky.lerp(Color(0.34, 0.31, 0.5), lift))
             slab.z_index = -19 + band
             Look.tile(slab, r.position, 80.0)
@@ -251,4 +236,3 @@ static func _build_side(data: Dictionary, world: Node2D, game: Node) -> void:
     for d in data["doors"]:
         add_door(world, d["rect"], d["target"], d["spawn"], game, Look.GOLD)
         add_label(world, "ROOM", d["rect"].position + Vector2(0, -34), Color(Look.GOLD.r, Look.GOLD.g, Look.GOLD.b, 0.9), 18)
-

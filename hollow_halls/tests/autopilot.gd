@@ -1,8 +1,4 @@
 extends Node
-## Scripted smoke test. Inert unless the game is launched with:
-##     godot --path . ++ --autopilot [--shots <dir>]
-## It drives the real input actions, so it exercises the same code paths a
-## player does: door transitions, the view swap, combat, death and reload.
 
 var enabled := false
 var shots_dir := ""
@@ -54,8 +50,6 @@ func _run() -> void:
     _log("--- death and reload ---")
     await _test_death()
 
-    # a check that quietly did not run is worse than one that failed, so the
-    # number of them is itself checked
     if checks != EXPECTED_CHECKS:
         failures += 1
         _log("  FAIL  ran %d checks, expected %d - something was skipped" % [checks, EXPECTED_CHECKS])
@@ -65,8 +59,6 @@ func _run() -> void:
     await _wait(0.2)
     get_tree().quit(1 if failures > 0 else 0)
 
-
-# ---------------------------------------------------------------------- tests
 
 func _test_start_room() -> void:
     _check(game.area_id == "room_a", "starts in room_a (got %s)" % game.area_id)
@@ -111,12 +103,7 @@ func _test_junction() -> void:
 
 
 func _test_walk_into_hallway() -> void:
-    # from a known spot: wherever the last test left the player, they might be
-    # behind an obstacle, and then walking east just leans on it until the
-    # timeout rather than reaching the door
     await _goto("room_a", "start")
-    # and let that reload's own fade finish first, or this test measures it
-    # instead of the seamless shift it is actually about
     var t_fade := Time.get_ticks_msec()
     while game.fade.color.a > 0.001 and Time.get_ticks_msec() - t_fade < 4000:
         await get_tree().process_frame
@@ -155,12 +142,11 @@ func _test_combat() -> void:
     if walker == null:
         return
 
-    # --- duel: stand off its left shoulder and swing until it dies
     var swings := 0
     var hp_before: int = walker.hp
     var soul_before: int = game.player.soul
     while is_instance_valid(walker) and not walker.dead and swings < 14:
-        game.player.health = 5  # keep the duel alive; damage is tested separately
+        game.player.health = 5
         game.player.global_position = walker.global_position + Vector2(-64, -8)
         game.player.velocity = Vector2.ZERO
         game.player.facing = 1
@@ -173,29 +159,22 @@ func _test_combat() -> void:
     _check(game.player.soul > soul_before, "landing hits gained soul (%d -> %d)" % [soul_before, game.player.soul])
     await _shot("03_combat_duel")
 
-    # --- pogo: fall onto an enemy with down held, swinging the whole way
-    #
-    # The down-slash box reaches 17..95 px below you, so drop from 70: at 95 the
-    # enemy sat on the very edge of it and whether the pogo landed came down to
-    # which frame the swing happened to be active on.
     var bounced := false
     var target = _find_enemy("walker")
     _check(target != null, "found a walker to pogo off")
     if target != null:
         game.player.health = 5
-        game.player.invuln = 4.0  # the point here is the bounce, not the contact
+        game.player.invuln = 4.0
         game.player.facing = 1
         Input.action_press("move_down")
         for i in 120:
             if not is_instance_valid(target) or target.dead:
                 break
-            # stay over it, and go back up if you land: a walker would otherwise
-            # just step aside, and a pogo needs you airborne
             game.player.global_position.x = target.global_position.x
             if game.player.is_on_floor() or game.player.global_position.y > target.global_position.y:
                 game.player.global_position = target.global_position + Vector2(0, -70)
                 game.player.velocity = Vector2(0, 90)
-            match i % 12:  # mash it, the way a player would
+            match i % 12:
                 0:
                     Input.action_press("attack")
                 4:
@@ -208,7 +187,6 @@ func _test_combat() -> void:
         Input.action_release("attack")
     _check(bounced, "down-slash pogoed off the enemy")
 
-    # --- contact damage: stand against an enemy and get bitten
     var biter = _find_enemy("walker")
     _check(biter != null, "found a walker to be bitten by")
     if biter != null:
@@ -218,8 +196,6 @@ func _test_combat() -> void:
         for i in 120:
             if not is_instance_valid(biter) or biter.dead:
                 break
-            # hold station on it every frame: a patrolling walker would step
-            # away from a player who was only placed beside it once
             game.player.global_position = biter.global_position + Vector2(-26, 0)
             game.player.velocity = Vector2.ZERO
             await get_tree().process_frame
@@ -228,7 +204,6 @@ func _test_combat() -> void:
         _check(game.player.health < hp0, "touching an enemy costs a mask (%d -> %d)" % [hp0, game.player.health])
         _check(game.player.invuln > 0.0, "taking damage grants i-frames")
 
-    # --- soul / focus healing
     game.player.health = 3
     game.player.soul = 99
     game.player.invuln = 0.0
@@ -259,7 +234,6 @@ func _test_hazard() -> void:
     await _wait(0.6)
     _check(game.player.global_position.x < 400.0, "spikes put the player back at the entrance (x=%d)" % game.player.global_position.x)
 
-    # falling into the pit during i-frames must still rescue you
     game.player.invuln = 5.0
     game.player.global_position = Vector2(2260, 600)
     game.player.velocity = Vector2(0, 200)
@@ -307,7 +281,6 @@ func _test_death() -> void:
 
 
 func _capture_shift() -> void:
-    # walk into the east doorway, then photograph the view shift frame by frame
     Input.action_press("move_right")
     var t0 := Time.get_ticks_msec()
     while game.area_id == "room_a" and Time.get_ticks_msec() - t0 < 12000:
@@ -318,8 +291,6 @@ func _capture_shift() -> void:
         _log("shift frame %d: zoom=%s slide=%s fade=%.2f" % [i, game.camera.zoom, game._cam_slide, game.fade.color.a])
         await _wait(0.06)
 
-
-# --------------------------------------------------------------------- helpers
 
 func _goto(id: String, spawn: String) -> void:
     while game.transitioning:
@@ -374,8 +345,6 @@ func _tap(action: String, hold := 0.06) -> void:
 func _shot(name: String) -> void:
     if shots_dir == "":
         return
-    # wait for a drawn frame, but never forever: an undrawn window (minimised,
-    # display asleep) would otherwise hang the whole run
     var drawn := [false]
     var on_draw := func() -> void: drawn[0] = true
     RenderingServer.frame_post_draw.connect(on_draw, CONNECT_ONE_SHOT)
@@ -383,7 +352,6 @@ func _shot(name: String) -> void:
     while not drawn[0] and Time.get_ticks_msec() - t0 < 1500:
         await get_tree().process_frame
     if not drawn[0]:
-        # never leave the callback armed: firing into a freed node crashes
         if RenderingServer.frame_post_draw.is_connected(on_draw):
             RenderingServer.frame_post_draw.disconnect(on_draw)
         _log("    (screenshot %s skipped: window is not being drawn)" % name)

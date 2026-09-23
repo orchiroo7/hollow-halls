@@ -1,5 +1,4 @@
 extends Node
-## Registers the input map at runtime so project.godot stays readable.
 
 const ACTIONS := {
     "move_left": [KEY_A, KEY_LEFT],

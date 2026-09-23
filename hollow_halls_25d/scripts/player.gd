@@ -1,10 +1,4 @@
 extends CharacterBody3D
-## Hollow Halls' player, in 3D, driven relative to the camera.
-##
-## Top view:  full 8-way movement on the ground, slash where you face.
-## Side view: the depth axis is locked, W/S aim the slash up/down, down-slash in
-##          the air pogoes - exactly the Hollow Halls corridor controls.
-## Jump, dash, soul and focus-healing work in every view.
 
 const Meshes := preload("res://scripts/meshes.gd")
 const Look := preload("res://scripts/look.gd")
@@ -47,8 +41,6 @@ const FOCUS_TIME := 0.85
 
 const KILL_Y := -12.0
 
-## Walking from a room into a hallway grants this long of being unhittable and
-## unseen: enemies will not chase you and touching them does no harm.
 const ENTRY_BUFFER := 2.0
 const GHOST_ALPHA := 0.35
 
@@ -72,7 +64,7 @@ var invuln := 0.0
 var hurt_lock := 0.0
 var focus_time := 0.0
 var dead := false
-var unseen := 0.0  # entry buffer time left
+var unseen := 0.0
 
 var _visual: Node3D
 var _body_mat: StandardMaterial3D
@@ -94,7 +86,6 @@ func _ready() -> void:
     collision_mask = LAYER_WORLD
     floor_snap_length = 0.3
 
-    # a capsule, not a box: a box snags on the seam where two floor boxes meet
     var cs := CollisionShape3D.new()
     var shape := CapsuleShape3D.new()
     shape.radius = SIZE.x * 0.48
@@ -102,13 +93,11 @@ func _ready() -> void:
     cs.shape = shape
     add_child(cs)
 
-    # body + visor on a pivot that turns to face where you are heading
     _visual = Node3D.new()
     add_child(_visual)
     var body := Meshes.box(SIZE, Look.BONE, false, false, Look.OUTLINE_THICK)
     _body_mat = body.material_override
     _edge_mat = _body_mat.next_pass
-    # a little light of your own: enough to bloom, not enough to shade anything
     _body_mat.emission_enabled = true
     _body_mat.emission = Look.BONE
     _body_mat.emission_energy_multiplier = 0.35
@@ -116,7 +105,6 @@ func _ready() -> void:
     var visor := Meshes.box(Vector3(0.5, 0.16, 0.08), Look.INK, true)
     visor.position = Vector3(0, 0.32, SIZE.z * 0.5 + 0.02)
     _visual.add_child(visor)
-    # a crest, so the silhouette is yours and nothing else's
     var crest := Meshes.box(Vector3(0.24, 0.34, 0.5), Look.CYAN, true)
     _crest_mat = crest.material_override
     _crest_mat.emission_enabled = true
@@ -124,8 +112,6 @@ func _ready() -> void:
     _crest_mat.emission_energy_multiplier = 1.6
     crest.position = Vector3(0, SIZE.y * 0.5 + 0.06, -0.12)
     _visual.add_child(crest)
-    # seen from straight above the visor is edge-on and useless, so the facing
-    # gets its own stripe across the top face
     var nose := Meshes.box(Vector3(0.18, 0.06, 0.34), Look.CYAN, true)
     nose.position = Vector3(0, SIZE.y * 0.5 + 0.02, SIZE.z * 0.28)
     _visual.add_child(nose)
@@ -158,7 +144,6 @@ func _ready() -> void:
     _focus_ring.position = Vector3(0, -SIZE.y * 0.5 + 0.05, 0)
     _focus_ring.visible = false
     add_child(_focus_ring)
-
 
 
 func _physics_process(delta: float) -> void:
@@ -199,7 +184,6 @@ func _physics_process(delta: float) -> void:
     if wish.length() > 0.1:
         facing_vec = wish.normalized()
 
-    # --- focus / heal (stand still, hold the key)
     var focusing := Input.is_action_pressed("focus") and on_floor and hurt_lock <= 0.0 \
         and wish.length() < 0.1 and soul >= FOCUS_COST and health < MAX_HEALTH and dash_time <= 0.0
     if focusing:
@@ -222,7 +206,6 @@ func _physics_process(delta: float) -> void:
     focus_time = 0.0
     _focus_ring.visible = false
 
-    # --- dash
     if Input.is_action_just_pressed("dash") and dash_cd <= 0.0 and hurt_lock <= 0.0:
         dash_time = DASH_TIME
         dash_cd = DASH_COOLDOWN
@@ -246,22 +229,19 @@ func _physics_process(delta: float) -> void:
         _update_visuals(delta, side)
         return
 
-    # --- attack
     if Input.is_action_just_pressed("attack") and attack_cd <= 0.0:
         _start_attack(side)
 
-    # --- ground movement
     var hv := Vector3(velocity.x, 0.0, velocity.z)
     if wish.length() > 0.1:
         hv = hv.move_toward(wish * RUN_SPEED, (GROUND_ACCEL if on_floor else AIR_ACCEL) * delta)
     else:
         hv = hv.move_toward(Vector3.ZERO, FRICTION * delta)
     if side:
-        hv -= fwd * hv.dot(fwd)  # side-on, depth is locked
+        hv -= fwd * hv.dot(fwd)
     velocity.x = hv.x
     velocity.z = hv.z
 
-    # --- jump
     if buffer > 0.0 and coyote > 0.0:
         velocity.y = JUMP_VELOCITY
         buffer = 0.0
@@ -275,9 +255,6 @@ func _physics_process(delta: float) -> void:
     _update_visuals(delta, side)
 
 
-# ----------------------------------------------------------------- facing
-
-## +1 / -1: which way along screen-right the player faces. Used side-on.
 func side_sign() -> float:
     if rig == null:
         return 1.0
@@ -290,8 +267,6 @@ func side_facing() -> Vector3:
     var r: Vector3 = rig.right_axis()
     return r * side_sign()
 
-
-# ------------------------------------------------------------------ combat
 
 func _start_attack(side: bool) -> void:
     attack_cd = ATTACK_COOLDOWN
@@ -317,7 +292,6 @@ func _tick_attack(delta: float) -> void:
         _slash.visible = false
 
 
-## [offset from the body centre, box size]
 func _attack_box() -> Array:
     if attack_dir == Vector3.UP:
         return [Vector3(0, 1.3, 0), Vector3(1.5, 1.8, 1.5)]
@@ -382,8 +356,6 @@ func _show_slash() -> void:
     tw.parallel().tween_property(_slash_mat, "albedo_color:a", 0.0, ATTACK_ACTIVE)
 
 
-# ------------------------------------------------------------------- state
-
 func is_hidden() -> bool:
     return unseen > 0.0
 
@@ -419,8 +391,6 @@ func take_damage(amount: int, from_pos: Vector3) -> void:
         _die()
 
 
-## Spikes and falling out of the world. Always sends you back to the last
-## checkpoint - i-frames only skip the damage, never the rescue.
 func hazard_hit() -> void:
     if dead or (game != null and game.frozen):
         return
@@ -469,8 +439,6 @@ func _update_visuals(delta: float, side: bool) -> void:
     var face: Vector3 = side_facing() if side else facing_vec
     _visual.rotation.y = atan2(face.x, face.z)
 
-    # see-through while the entry buffer hides you - body, outline and crest
-    # together, or the ghost would keep a solid edge
     var want_a := GHOST_ALPHA if unseen > 0.0 else 1.0
     if not is_equal_approx(_body_mat.albedo_color.a, want_a):
         var mode: BaseMaterial3D.Transparency = BaseMaterial3D.TRANSPARENCY_ALPHA if want_a < 1.0 else BaseMaterial3D.TRANSPARENCY_DISABLED
@@ -489,23 +457,18 @@ func _update_visuals(delta: float, side: bool) -> void:
         _visual.visible = true
 
     if side:
-        # squash and stretch in the air, as in the original's side view
         if not is_on_floor():
             var st := clampf(velocity.y / 30.0, -0.35, 0.35)
             _visual.scale = Vector3(1.0 - absf(st) * 0.4, 1.0 + absf(st) * 0.35, 1.0 - absf(st) * 0.4)
         else:
             _visual.scale = Vector3.ONE
     elif rig != null and rig.is_free():
-        # real perspective here: height speaks for itself
         _visual.scale = Vector3.ONE
     else:
-        # the flat top view has no shadows and no perspective, so a jump would
-        # be invisible: grow the body with height instead, like a 2D game would
         var k := 1.0 + clampf(height_above_ground(), 0.0, 6.0) * 0.08
         _visual.scale = Vector3(k, k, k)
 
 
-## Distance from the feet to whatever solid is directly below.
 func height_above_ground() -> float:
     var from := global_position
     var q := PhysicsRayQueryParameters3D.create(from, from + Vector3(0, -30, 0), LAYER_WORLD)

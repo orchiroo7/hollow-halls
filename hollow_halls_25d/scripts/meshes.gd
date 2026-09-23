@@ -1,10 +1,4 @@
 extends RefCounted
-## Shared box-mesh helper. Depends only on the theme, so any script can preload
-## it without creating a cyclic reference.
-##
-## `grid` lays the shared tile texture over the box, which is what gives a flat
-## surface its scale. `outline` draws a dark edge around it, which is what keeps
-## one flat box apart from the next when nothing is casting a shadow.
 
 const Look := preload("res://scripts/look.gd")
 

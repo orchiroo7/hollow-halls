@@ -1,13 +1,4 @@
 extends Node2D
-## Root. Owns the player, the camera, area loading and the view shift.
-##
-## Door transitions are seamless: no fade to black. The outgoing area stays on
-## screen and dissolves while the incoming one builds underneath it, and the
-## camera never cuts - at the first frame of a shift the player and the old
-## geometry are exactly where they were, and the camera then slides and tips
-## into the new framing. Tipping is faked by squashing the camera vertically
-## (zoom.y) down to a grazing angle and back out, which is what going from an
-## overhead view to a side-on one looks like.
 
 const LevelData := preload("res://scripts/level_data.gd")
 const WorldBuilder := preload("res://scripts/world_builder.gd")
@@ -21,11 +12,11 @@ const START_SPAWN := "start"
 const ZOOM_TOPDOWN := Vector2(0.8, 0.8)
 const ZOOM_SIDE := Vector2(1.15, 1.15)
 
-const SHIFT_TIME := 0.55        # length of a seamless door transition
-const PITCH := 0.24             # how flat the view gets at the tip of a view change
-const PITCH_IN := 0.42          # fraction of the shift spent tipping over
-const MAX_CAM_SLIDE := 1600.0   # cap on how far the camera slides to stay continuous
-const ENTRY_SPEED := 220.0      # forward nudge when stepping out of a doorway
+const SHIFT_TIME := 0.55
+const PITCH := 0.24
+const PITCH_IN := 0.42
+const MAX_CAM_SLIDE := 1600.0
+const ENTRY_SPEED := 220.0
 
 var world: Node2D
 var old_world: Node2D = null
@@ -45,7 +36,7 @@ var _shake := 0.0
 var _cam_pos := Vector2.ZERO
 var _cam_slide := Vector2.ZERO
 var _hitstops := 0
-var last_slide := 0.0  # diagnostic: how far the last shift had to pan
+var last_slide := 0.0
 
 
 func _ready() -> void:
@@ -106,9 +97,6 @@ func _process(delta: float) -> void:
 	hud.set_soul(player.soul, PlayerScript.SOUL_MAX)
 
 
-## Keep the view inside the area. Done by hand rather than with Camera2D limits
-## because the zoom animates during a shift: when the view grows taller than the
-## area we centre on it instead, which stays continuous with the clamped case.
 func _clamp_cam(pos: Vector2) -> Vector2:
 	var half: Vector2 = get_viewport_rect().size * 0.5 / camera.zoom
 	var p := pos
@@ -132,12 +120,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		enter_area(area_id, spawn_key, false, true)
 
 
-# ---------------------------------------------------------------- transitions
-
 func request_transition(target: String, spawn: String) -> void:
 	if transitioning or door_lock > 0.0 or player.dead:
 		return
-	# doors fire from inside a physics callback, so never touch the tree here
 	call_deferred("enter_area", target, spawn, false, false)
 
 
@@ -157,8 +142,6 @@ func enter_area(id: String, spawn: String, instant := false, use_fade := false) 
 	if use_fade and not instant:
 		await _fade_to(1.0, 0.16)
 
-	# retire the outgoing area: for a seamless shift it stays on screen and
-	# dissolves, otherwise it goes immediately
 	if old_world != null:
 		old_world.queue_free()
 		old_world = null
@@ -172,7 +155,7 @@ func enter_area(id: String, spawn: String, instant := false, use_fade := false) 
 	var fresh := Node2D.new()
 	fresh.name = "World"
 	add_child(fresh)
-	move_child(fresh, 0)  # behind the dissolving old area, both behind the player
+	move_child(fresh, 0)
 	world = fresh
 
 	area_id = id
@@ -197,7 +180,6 @@ func enter_area(id: String, spawn: String, instant := false, use_fade := false) 
 		_cam_slide = Vector2.ZERO
 		_cam_pos = _clamp_cam(player.global_position)
 		camera.global_position = _cam_pos
-		# covers both the first load (opens from black) and a death reload
 		await _fade_to(0.0, 0.22)
 		transitioning = false
 		return
@@ -206,25 +188,20 @@ func enter_area(id: String, spawn: String, instant := false, use_fade := false) 
 	transitioning = false
 
 
-## The seamless view shift. Starts as a pixel-perfect continuation of the last
-## frame, then slides, dissolves and (on a view change) tips the camera over.
 func _shift(from_kind: String, target_zoom: Vector2, zoom_before: Vector2,
 		cam_before: Vector2, pos_before: Vector2) -> void:
 	var changed_view := from_kind != area_kind
 
-	# hold the zoom, so frame zero looks exactly like the frame before it
 	camera.zoom = zoom_before
 	var cam_new := _clamp_cam(player.global_position)
 	_cam_pos = cam_new
 
-	# slide the camera so the player does not jump on screen, then ease it out
 	var slide: Vector2 = (player.global_position - cam_new) - (pos_before - cam_before)
 	last_slide = slide.length()
 	slide = slide.limit_length(MAX_CAM_SLIDE)
 	_cam_slide = slide
 	camera.global_position = cam_new + slide
 
-	# pin the outgoing area to where it already was on screen
 	old_world.position = cam_new + slide - cam_before
 
 	world.modulate.a = 0.0
@@ -241,7 +218,6 @@ func _shift(from_kind: String, target_zoom: Vector2, zoom_before: Vector2,
 	tw.tween_property(world, "modulate:a", 1.0, SHIFT_TIME * 0.6)
 
 	if changed_view:
-		# tip over: flatten the view to a grazing angle, then open it back up
 		var tip := create_tween()
 		tip.set_ignore_time_scale(true)
 		tip.tween_property(camera, "zoom:y", target_zoom.y * PITCH, SHIFT_TIME * PITCH_IN) \
@@ -260,8 +236,6 @@ func _shift(from_kind: String, target_zoom: Vector2, zoom_before: Vector2,
 		old_world = null
 
 
-## An area on its way out keeps drawing but must stop being part of the game:
-## no collision, and its enemies leave the group so nothing counts them twice.
 func _retire(w: Node) -> void:
 	w.process_mode = Node.PROCESS_MODE_DISABLED
 	for n in w.get_children():
@@ -272,7 +246,6 @@ func _retire(w: Node) -> void:
 			n.remove_from_group("enemy")
 
 
-## Step out of a doorway still moving, instead of landing at a dead stop.
 func _carry_momentum(from_kind: String, spawn: String, vel_before: Vector2) -> void:
 	if area_kind != "side":
 		return
@@ -291,8 +264,6 @@ func _fade_to(alpha: float, time: float) -> void:
 	tw.tween_property(fade, "color:a", alpha, time)
 	await tw.finished
 
-
-# ------------------------------------------------------------------- feedback
 
 func hit_stop(duration: float) -> void:
 	_hitstops += 1

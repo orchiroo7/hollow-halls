@@ -1,5 +1,4 @@
 extends Node
-## Registers the input map at runtime so project.godot stays readable.
 
 const ACTIONS := {
     "move_left": [KEY_A, KEY_LEFT],
@@ -16,6 +15,7 @@ const ACTIONS := {
     "cam_top": [KEY_1],
     "cam_side": [KEY_2],
     "cam_free": [KEY_3],
+    "lang_toggle": [KEY_8],
     "cam_closer": [KEY_EQUAL, KEY_PLUS, KEY_KP_ADD],
     "cam_further": [KEY_MINUS, KEY_KP_SUBTRACT],
     "restart": [KEY_R],
@@ -30,9 +30,6 @@ func _ready() -> void:
             var ev := InputEventKey.new()
             ev.physical_keycode = key
             InputMap.action_add_event(action, ev)
-    # Tab is ours alone. Godot binds it to UI focus navigation by default, and a
-    # focused Control would swallow it before _unhandled_input saw it. Nothing
-    # in this game is focusable, so the navigation bindings just go.
     for ui in ["ui_focus_next", "ui_focus_prev"]:
         if InputMap.has_action(ui):
             InputMap.action_erase_events(ui)

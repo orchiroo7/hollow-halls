@@ -1,7 +1,4 @@
 extends RefCounted
-## The look of the game in one place: palette, the tile texture the surfaces
-## share, and the vignette. Everything here is flat colour - no lighting, no
-## normal maps - so it stays readable in both views.
 
 const INK := Color(0.04, 0.035, 0.07)
 const VOID := Color(0.055, 0.05, 0.09)
@@ -17,8 +14,6 @@ const OUTLINE := 3.0
 static var _grid: Texture2D = null
 
 
-## A tile sheet that multiplies whatever colour it is laid over: a dark seam
-## round the edge, a fainter cross through the middle.
 static func grid_texture() -> Texture2D:
     if _grid != null:
         return _grid
@@ -37,15 +32,11 @@ static func grid_texture() -> Texture2D:
     return _grid
 
 
-## Lays the tiles over a box, anchored in world space so the grid runs straight
-## across everything rather than restarting inside each box.
 static func tile(p: Polygon2D, world_origin: Vector2, scale := 1.0) -> void:
     p.texture = grid_texture()
     p.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
     p.texture_scale = Vector2(scale, scale)
     p.texture_offset = -world_origin / scale
-    # no mipmaps: they wash a hairline grid away entirely. The seams are drawn
-    # wide enough instead that plain linear filtering keeps them steady.
     p.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 
 
@@ -75,7 +66,6 @@ static func vignette() -> CanvasLayer:
     return layer
 
 
-## Bloom, so the gold doorways and the player carry a little light.
 static func environment() -> WorldEnvironment:
     var env := Environment.new()
     env.background_mode = Environment.BG_CANVAS
